@@ -1,6 +1,6 @@
 const std = @import("std");
 
-fn epsilon_eq(a: anytype, b: @TypeOf(a)) bool {
+fn epsilonEq(a: anytype, b: @TypeOf(a)) bool {
     return std.math.approxEqAbs(@TypeOf(a), a, b, std.math.epsilon(@TypeOf(a)));
 }
 
@@ -31,11 +31,18 @@ const Tuple = struct {
     }
 
     fn isPoint(self: Self) bool {
-        return epsilon_eq(self.w, 1.0);
+        return epsilonEq(self.w, 1.0);
     }
 
     fn isVector(self: Self) bool {
-        return epsilon_eq(self.w, 0.0);
+        return epsilonEq(self.w, 0.0);
+    }
+
+    fn eql(self: Self, other: Self) bool {
+        return epsilonEq(self.x, other.x) and
+            epsilonEq(self.y, other.y) and
+            epsilonEq(self.z, other.z) and
+            epsilonEq(self.w, other.w);
     }
 };
 
@@ -63,8 +70,24 @@ test "point / vector" {
 
 test "init" {
     const p = Tuple.initPoint(4, -4, 3);
-    try std.testing.expect(epsilon_eq(p.w, 1.0));
+    try std.testing.expect(epsilonEq(p.w, 1.0));
 
     const v = Tuple.initVector(4, -4, 3);
-    try std.testing.expect(epsilon_eq(v.w, 0.0));
+    try std.testing.expect(epsilonEq(v.w, 0.0));
+}
+
+test "equality" {
+    const p = Tuple.initPoint(4, -4, 3);
+    const v = Tuple.initVector(4, -4, 3);
+
+    try std.testing.expect(p.eql(Tuple.initPoint(4, -4, 3)) == true);
+
+    try std.testing.expect(p.eql(Tuple.initPoint(4, -4, 3.01)) == false);
+    try std.testing.expect(p.eql(Tuple.initPoint(4, -4.01, 3)) == false);
+    try std.testing.expect(p.eql(Tuple.initPoint(4.01, -4, 3)) == false);
+
+    try std.testing.expect(p.eql(p) == true);
+    try std.testing.expect(p.eql(v) == false);
+
+    try std.testing.expect(v.eql(Tuple.initVector(4, -4, 3)) == true);
 }
