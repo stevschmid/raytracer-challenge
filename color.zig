@@ -1,8 +1,5 @@
 const std = @import("std");
-
-fn epsilonEq(a: anytype, b: @TypeOf(a)) bool {
-    return std.math.approxEqAbs(@TypeOf(a), a, b, std.math.epsilon(@TypeOf(a)));
-}
+const epsilonEq = @import("utils.zig").epsilonEq;
 
 pub const Color = struct {
     const Self = @This();
