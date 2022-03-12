@@ -1,8 +1,7 @@
 const std = @import("std");
-
 const Color = @import("color.zig").Color;
 
-const Canvas = struct {
+pub const Canvas = struct {
     const Self = @This();
 
     allocator: std.mem.Allocator,
