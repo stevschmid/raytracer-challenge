@@ -4,7 +4,7 @@ fn epsilonEq(a: anytype, b: @TypeOf(a)) bool {
     return std.math.approxEqAbs(@TypeOf(a), a, b, std.math.epsilon(@TypeOf(a)));
 }
 
-const Tuple = struct {
+pub const Tuple = struct {
     const Self = @This();
 
     x: f32,
@@ -86,6 +86,32 @@ const Tuple = struct {
 
     pub fn length(self: Self) f32 {
         return std.math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w);
+    }
+
+    pub fn normalize(self: Self) Self {
+        const len = self.length();
+
+        return .{
+            .x = self.x / len,
+            .y = self.y / len,
+            .z = self.z / len,
+            .w = self.w / len,
+        };
+    }
+
+    pub fn dot(self: Self, other: Self) f32 {
+        return self.x * other.x +
+            self.y * other.y +
+            self.z * other.z +
+            self.w * other.w;
+    }
+
+    pub fn cross(self: Self, other: Self) Self {
+        return initVector(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x,
+        );
     }
 };
 
@@ -187,4 +213,29 @@ test "length of vectors" {
 
     const v4 = Tuple.initVector(-1, -2, -3);
     try std.testing.expect(epsilonEq(v4.length(), std.math.sqrt(14.0)));
+}
+
+test "normalize" {
+    const v1 = Tuple.initVector(4, 0, 0);
+    try std.testing.expect(v1.normalize().eql(Tuple.initVector(1, 0, 0)));
+
+    const v2 = Tuple.initVector(1, 2, 3);
+    const len = std.math.sqrt(14.0);
+    try std.testing.expect(v2.normalize().eql(Tuple.initVector(1.0 / len, 2.0 / len, 3.0 / len)));
+    try std.testing.expect(epsilonEq(v2.normalize().length(), 1.0));
+}
+
+test "dot product" {
+    const a = Tuple.initVector(1, 2, 3);
+    const b = Tuple.initVector(2, 3, 4);
+
+    try std.testing.expect(epsilonEq(a.dot(b), 20.0));
+}
+
+test "cross product" {
+    const a = Tuple.initVector(1, 2, 3);
+    const b = Tuple.initVector(2, 3, 4);
+
+    try std.testing.expect(a.cross(b).eql(Tuple.initVector(-1, 2, -1)));
+    try std.testing.expect(b.cross(a).eql(Tuple.initVector(1, -2, 1)));
 }
