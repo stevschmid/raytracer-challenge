@@ -1,28 +1,46 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 const epsilonEq = @import("utils.zig").epsilonEq;
+const Tuple = @import("tuple.zig").Tuple;
 
-pub fn Matrix(comptime Rows: usize, comptime Columns: usize) type {
+pub fn Matrix(comptime Size: usize) type {
     return struct {
         const Self = @This();
 
-        pub const num_rows = Rows;
-        pub const num_cols = Columns;
+        pub const num_rows = Size;
+        pub const num_cols = Size;
 
         data: [num_rows][num_cols]f32 = undefined,
 
         pub fn eql(self: Self, other: Self) bool {
-            var row: usize = 0;
-
-            const is_equal = res: while (row < num_rows) : (row += 1) {
-                var col: usize = 0;
-                while (col < num_cols) : (col += 1) {
-                    if (!epsilonEq(self.data[row][col], other.data[row][col]))
-                        break :res false;
+            for (self.data) |row, row_idx| {
+                for (row) |val, col_idx| {
+                    if (!epsilonEq(val, other.data[row_idx][col_idx]))
+                        return false;
                 }
-            } else true;
+            }
 
-            return is_equal;
+            return true;
+        }
+
+        pub fn mult(self: Self, other: Self) Self {
+            const a = self.data;
+            const b = other.data;
+
+            var res = Self{};
+
+            for (res.data) |*row, row_idx| {
+                for (row) |*val, col_idx| {
+                    val.* = 0.0;
+
+                    var i: usize = 0;
+                    while (i < Size) : (i += 1) {
+                        val.* += a[row_idx][i] * b[i][col_idx];
+                    }
+                }
+            }
+
+            return res;
         }
 
         pub fn at(self: Self, row: usize, col: usize) f32 {
@@ -31,9 +49,9 @@ pub fn Matrix(comptime Rows: usize, comptime Columns: usize) type {
     };
 }
 
-pub const Mat2 = Matrix(2, 2);
-pub const Mat3 = Matrix(3, 3);
-pub const Mat4 = Matrix(4, 4);
+pub const Mat2 = Matrix(2);
+pub const Mat3 = Matrix(3);
+pub const Mat4 = Matrix(4);
 
 test "constructing and inspecting a 4x4 matrix" {
     const m = Mat4{
@@ -124,4 +142,37 @@ test "matrix equality with different matrices" {
     };
 
     try std.testing.expect(a.eql(b) == false);
+}
+
+test "multiplying two matrices" {
+    const a = Mat4{
+        .data = .{
+            .{ 1, 2, 3, 4 },
+            .{ 5, 6, 7, 8 },
+            .{ 9, 8, 7, 6 },
+            .{ 5, 4, 3, 2 },
+        },
+    };
+
+    const b = Mat4{
+        .data = .{
+            .{ -2, 1, 2, 3 },
+            .{ 3, 2, 1, -1 },
+            .{ 4, 3, 6, 5 },
+            .{ 1, 2, 7, 8 },
+        },
+    };
+
+    const result = a.mult(b);
+
+    const expected = Mat4{
+        .data = .{
+            .{ 20, 22, 50, 48 },
+            .{ 44, 54, 114, 108 },
+            .{ 40, 58, 110, 102 },
+            .{ 16, 26, 46, 42 },
+        },
+    };
+
+    try std.testing.expect(result.eql(expected));
 }
