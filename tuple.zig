@@ -1,238 +1,243 @@
 const std = @import("std");
 const epsilonEq = @import("utils.zig").epsilonEq;
 
-pub const Tuple = struct {
-    const Self = @This();
+pub fn Vector(comptime Size: usize) type {
+    return struct {
+        const Self = @This();
 
-    x: f32,
-    y: f32,
-    z: f32,
-    w: f32,
+        data: [Size]f32 = undefined,
 
-    pub fn init(x: f32, y: f32, z: f32, w: f32) Self {
-        return .{
-            .x = x,
-            .y = y,
-            .z = z,
-            .w = w,
-        };
-    }
+        pub fn init(tuple: anytype) Self {
+            var new = Self{};
 
-    pub fn initPoint(x: f32, y: f32, z: f32) Self {
-        return init(x, y, z, 1.0);
-    }
+            if (tuple.len != Size) @compileError("Incorrect number of inputs supplied");
 
-    pub fn initVector(x: f32, y: f32, z: f32) Self {
-        return init(x, y, z, 0.0);
-    }
+            inline for (tuple) |val, idx| {
+                new.data[idx] = val;
+            }
 
-    pub fn isPoint(self: Self) bool {
-        return epsilonEq(self.w, 1.0);
-    }
+            return new;
+        }
 
-    pub fn isVector(self: Self) bool {
-        return epsilonEq(self.w, 0.0);
-    }
+        pub fn eql(self: Self, other: Self) bool {
+            for (self.data) |_, idx| {
+                if (!epsilonEq(self.data[idx], other.data[idx]))
+                    return false;
+            }
 
-    pub fn eql(self: Self, other: Self) bool {
-        return epsilonEq(self.x, other.x) and
-            epsilonEq(self.y, other.y) and
-            epsilonEq(self.z, other.z) and
-            epsilonEq(self.w, other.w);
-    }
+            return true;
+        }
 
-    pub fn add(self: Self, other: Self) Self {
-        return .{
-            .x = self.x + other.x,
-            .y = self.y + other.y,
-            .z = self.z + other.z,
-            .w = self.w + other.w,
-        };
-    }
+        pub fn add(self: Self, other: Self) Self {
+            var new = Self{};
 
-    pub fn sub(self: Self, other: Self) Self {
-        return .{
-            .x = self.x - other.x,
-            .y = self.y - other.y,
-            .z = self.z - other.z,
-            .w = self.w - other.w,
-        };
-    }
+            for (new.data) |*val, idx| {
+                val.* = self.data[idx] + other.data[idx];
+            }
 
-    pub fn negate(self: Self) Self {
-        return .{
-            .x = -self.x,
-            .y = -self.y,
-            .z = -self.z,
-            .w = -self.w,
-        };
-    }
+            return new;
+        }
 
-    pub fn scale(self: Self, scalar: f32) Self {
-        return .{
-            .x = scalar * self.x,
-            .y = scalar * self.y,
-            .z = scalar * self.z,
-            .w = scalar * self.w,
-        };
-    }
+        pub fn sub(self: Self, other: Self) Self {
+            var new = Self{};
 
-    pub fn div(self: Self, scalar: f32) Self {
-        return self.scale(1.0 / scalar);
-    }
+            for (new.data) |*val, idx| {
+                val.* = self.data[idx] - other.data[idx];
+            }
 
-    pub fn length(self: Self) f32 {
-        return std.math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w);
-    }
+            return new;
+        }
 
-    pub fn normalize(self: Self) Self {
-        const len = self.length();
+        pub fn negate(self: Self) Self {
+            return self.scale(-1.0);
+        }
 
-        return .{
-            .x = self.x / len,
-            .y = self.y / len,
-            .z = self.z / len,
-            .w = self.w / len,
-        };
-    }
+        pub fn scale(self: Self, scalar: f32) Self {
+            var new = Self{};
 
-    pub fn dot(self: Self, other: Self) f32 {
-        return self.x * other.x +
-            self.y * other.y +
-            self.z * other.z +
-            self.w * other.w;
-    }
+            for (new.data) |*val, idx| {
+                val.* = scalar * self.data[idx];
+            }
 
-    pub fn cross(self: Self, other: Self) Self {
-        return initVector(
-            self.y * other.z - self.z * other.y,
-            self.z * other.x - self.x * other.z,
-            self.x * other.y - self.y * other.x,
-        );
-    }
-};
+            return new;
+        }
 
-test "point / vector" {
-    const a = Tuple.init(4.3, -4.2, 3.1, 1.0);
+        pub fn div(self: Self, scalar: f32) Self {
+            var new = Self{};
 
-    try std.testing.expect(a.isPoint() == true);
-    try std.testing.expect(a.isVector() == false);
+            for (new.data) |*val, idx| {
+                val.* = self.data[idx] / scalar;
+            }
 
-    const b = Tuple.init(4.3, -4.2, 3.1, 0.0);
+            return new;
+        }
 
-    try std.testing.expect(b.isPoint() == false);
-    try std.testing.expect(b.isVector() == true);
+        pub fn length(self: Self) f32 {
+            var sum: f32 = 0.0;
+
+            for (self.data) |val| {
+                sum += val * val;
+            }
+
+            return std.math.sqrt(sum);
+        }
+
+        pub fn normalize(self: Self) Self {
+            const len = self.length();
+
+            var new = Self{};
+
+            for (new.data) |*val, idx| {
+                val.* = self.data[idx] / len;
+            }
+
+            return new;
+        }
+
+        pub fn dot(self: Self, other: Self) f32 {
+            var res: f32 = 0.0;
+
+            for (self.data) |_, idx| {
+                res += self.data[idx] * other.data[idx];
+            }
+
+            return res;
+        }
+
+        pub fn cross(self: Self, other: Self) Vector(3) {
+            if (Size < 3) @compileError("Expected dimension of vector >= 3");
+
+            var res = Vector(3){};
+
+            const a = self.data;
+            const b = other.data;
+
+            res.data[0] = a[1] * b[2] - a[2] * b[1];
+            res.data[1] = a[2] * b[0] - a[0] * b[2];
+            res.data[2] = a[0] * b[1] - a[1] * b[0];
+
+            return res;
+        }
+    };
 }
 
-test "init" {
-    const p = Tuple.initPoint(4, -4, 3);
-    try std.testing.expect(epsilonEq(p.w, 1.0));
+pub const Vec2 = Vector(2);
+pub const Vec3 = Vector(3);
+pub const Vec4 = Vector(4);
 
-    const v = Tuple.initVector(4, -4, 3);
-    try std.testing.expect(epsilonEq(v.w, 0.0));
-}
+// test "point / vector" {
+//     const a = Tuple.init(4.3, -4.2, 3.1, 1.0);
+
+//     try std.testing.expect(a.isPoint() == true);
+//     try std.testing.expect(a.isVector() == false);
+
+//     const b = Tuple.init(4.3, -4.2, 3.1, 0.0);
+
+//     try std.testing.expect(b.isPoint() == false);
+//     try std.testing.expect(b.isVector() == true);
+// }
 
 test "equality" {
-    const p = Tuple.initPoint(4, -4, 3);
-    const v = Tuple.initVector(4, -4, 3);
+    const p = Vec4.init(.{ 4, -4, 3, 1 });
+    const v = Vec4.init(.{ 4, -4, 3, 0 });
 
-    try std.testing.expect(p.eql(Tuple.initPoint(4, -4, 3)) == true);
+    try std.testing.expect(p.eql(Vec4.init(.{ 4, -4, 3, 1 })) == true);
 
-    try std.testing.expect(p.eql(Tuple.initPoint(4, -4, 3.01)) == false);
-    try std.testing.expect(p.eql(Tuple.initPoint(4, -4.01, 3)) == false);
-    try std.testing.expect(p.eql(Tuple.initPoint(4.01, -4, 3)) == false);
+    try std.testing.expect(p.eql(Vec4.init(.{ 4, -4, 3.01, 1 })) == false);
+    try std.testing.expect(p.eql(Vec4.init(.{ 4, -4.01, 3, 1 })) == false);
+    try std.testing.expect(p.eql(Vec4.init(.{ 4.01, -4, 3, 1 })) == false);
 
     try std.testing.expect(p.eql(p) == true);
     try std.testing.expect(p.eql(v) == false);
 
-    try std.testing.expect(v.eql(Tuple.initVector(4, -4, 3)) == true);
+    try std.testing.expect(v.eql(Vec4.init(.{ 4, -4, 3, 0 })) == true);
 }
 
 test "adding two tuples" {
-    const a1 = Tuple.init(3, -2, 5, 1);
-    const a2 = Tuple.init(-2, 3, 1, 0);
+    const a1 = Vec4.init(.{ 3, -2, 5, 1 });
+    const a2 = Vec4.init(.{ -2, 3, 1, 0 });
 
     const result = a1.add(a2);
-    try std.testing.expect(result.eql(Tuple.init(1, 1, 6, 1)) == true);
+    try std.testing.expect(result.eql(Vec4.init(.{ 1, 1, 6, 1 })) == true);
 }
 
 test "subtracting a vector from a point" {
-    const p = Tuple.initPoint(3, 2, 1);
-    const v = Tuple.initVector(5, 6, 7);
+    const p = Vec4.init(.{ 3, 2, 1, 1 });
+    const v = Vec4.init(.{ 5, 6, 7, 0 });
 
     const result = p.sub(v);
-    try std.testing.expect(result.eql(Tuple.initPoint(-2, -4, -6)));
+    try std.testing.expect(result.eql(Vec4.init(.{ -2, -4, -6, 1 })));
 }
 
 test "subtracting two vectors" {
-    const v1 = Tuple.initVector(3, 2, 1);
-    const v2 = Tuple.initVector(5, 6, 7);
+    const v1 = Vec3.init(.{ 3, 2, 1 });
+    const v2 = Vec3.init(.{ 5, 6, 7 });
 
     const result = v1.sub(v2);
-    try std.testing.expect(result.eql(Tuple.initVector(-2, -4, -6)));
+    try std.testing.expect(result.eql(Vec3.init(.{ -2, -4, -6 })));
 }
 
-test "subtracting a vector from the zeor vector" {
-    const zero = Tuple.initVector(0, 0, 0);
-    const v = Tuple.initVector(1, -2, 3);
+test "subtracting a vector from the zero vector" {
+    const zero = Vec3.init(.{ 0, 0, 0 });
+    const v = Vec3.init(.{ 1, -2, 3 });
 
     const result = zero.sub(v);
-    try std.testing.expect(result.eql(Tuple.initVector(-1, 2, -3)));
+    try std.testing.expect(result.eql(Vec3.init(.{ -1, 2, -3 })));
 }
 
 test "negating a tuple" {
-    const a = Tuple.init(1, -2, 3, -4);
+    const a = Vec4.init(.{ 1, -2, 3, -4 });
     const result = a.negate();
-    try std.testing.expect(result.eql(Tuple.init(-1, 2, -3, 4)));
+    try std.testing.expect(result.eql(Vec4.init(.{ -1, 2, -3, 4 })));
 }
 
 test "multiplying a tuple by a scalar" {
-    const a = Tuple.init(1, -2, 3, -4);
+    const a = Vec4.init(.{ 1, -2, 3, -4 });
     const result = a.scale(0.5);
-    try std.testing.expect(result.eql(Tuple.init(0.5, -1, 1.5, -2)));
+    try std.testing.expect(result.eql(Vec4.init(.{ 0.5, -1, 1.5, -2 })));
 }
 
 test "dividing a tuple by a scalar" {
-    const a = Tuple.init(1, -2, 3, -4);
+    const a = Vec4.init(.{ 1, -2, 3, -4 });
     const result = a.div(2);
-    try std.testing.expect(result.eql(Tuple.init(0.5, -1, 1.5, -2)));
+    try std.testing.expect(result.eql(Vec4.init(.{ 0.5, -1, 1.5, -2 })));
 }
 
 test "length of vectors" {
-    const v1 = Tuple.initVector(1, 0, 0);
+    const v1 = Vec3.init(.{ 1, 0, 0 });
     try std.testing.expect(epsilonEq(v1.length(), 1.0));
 
-    const v2 = Tuple.initVector(0, 0, 1);
+    const v2 = Vec3.init(.{ 0, 0, 1 });
     try std.testing.expect(epsilonEq(v2.length(), 1.0));
 
-    const v3 = Tuple.initVector(1, 2, 3);
+    const v3 = Vec3.init(.{ 1, 2, 3 });
     try std.testing.expect(epsilonEq(v3.length(), std.math.sqrt(14.0)));
 
-    const v4 = Tuple.initVector(-1, -2, -3);
+    const v4 = Vec3.init(.{ -1, -2, -3 });
     try std.testing.expect(epsilonEq(v4.length(), std.math.sqrt(14.0)));
 }
 
 test "normalize" {
-    const v1 = Tuple.initVector(4, 0, 0);
-    try std.testing.expect(v1.normalize().eql(Tuple.initVector(1, 0, 0)));
+    const v1 = Vec3.init(.{ 4, 0, 0 });
+    try std.testing.expect(v1.normalize().eql(Vec3.init(.{ 1, 0, 0 })));
 
-    const v2 = Tuple.initVector(1, 2, 3);
+    const v2 = Vec3.init(.{ 1, 2, 3 });
     const len = std.math.sqrt(14.0);
-    try std.testing.expect(v2.normalize().eql(Tuple.initVector(1.0 / len, 2.0 / len, 3.0 / len)));
+    try std.testing.expect(v2.normalize().eql(Vec3.init(.{ 1.0 / len, 2.0 / len, 3.0 / len })));
     try std.testing.expect(epsilonEq(v2.normalize().length(), 1.0));
 }
 
 test "dot product" {
-    const a = Tuple.initVector(1, 2, 3);
-    const b = Tuple.initVector(2, 3, 4);
+    const a = Vec3.init(.{ 1, 2, 3 });
+    const b = Vec3.init(.{ 2, 3, 4 });
 
     try std.testing.expect(epsilonEq(a.dot(b), 20.0));
 }
 
 test "cross product" {
-    const a = Tuple.initVector(1, 2, 3);
-    const b = Tuple.initVector(2, 3, 4);
+    const a = Vec3.init(.{ 1, 2, 3 });
+    const b = Vec3.init(.{ 2, 3, 4 });
 
-    try std.testing.expect(a.cross(b).eql(Tuple.initVector(-1, 2, -1)));
-    try std.testing.expect(b.cross(a).eql(Tuple.initVector(1, -2, 1)));
+    try std.testing.expect(a.cross(b).eql(Vec3.init(.{ -1, 2, -1 })));
+    try std.testing.expect(b.cross(a).eql(Vec3.init(.{ 1, -2, 1 })));
 }
