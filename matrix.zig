@@ -617,15 +617,6 @@ test "testing an noninvertible matrix for invertibility" {
     try std.testing.expect(!a.isInvertible());
 }
 
-fn expectMatrixApproxEq(expected: anytype, actual: @TypeOf(expected)) !void {
-    for (expected.mat) |row_values, row| {
-        for (row_values) |_, col| {
-            // tolerance of 0.00001 since the book shows max 5 digits
-            try std.testing.expectApproxEqAbs(expected.mat[row][col], actual.mat[row][col], 0.00001);
-        }
-    }
-}
-
 test "calculating the inverse of a matrix" {
     const a = Mat4{
         .mat = .{
@@ -653,7 +644,7 @@ test "calculating the inverse of a matrix" {
     try utils.expectEpsilonEq(a.cofactor(3, 2), 105);
     try utils.expectEpsilonEq(b.at(2, 3), 105.0 / 532.0);
 
-    try expectMatrixApproxEq(b, expected);
+    try utils.expectMatrixApproxEq(b, expected);
 }
 
 test "calculating the inverse of another matrix" {
@@ -675,7 +666,7 @@ test "calculating the inverse of another matrix" {
         },
     };
 
-    try expectMatrixApproxEq(a.inverse(), expected);
+    try utils.expectMatrixApproxEq(a.inverse(), expected);
 }
 
 test "calculating the inverse of a third matrix" {
@@ -697,7 +688,7 @@ test "calculating the inverse of a third matrix" {
         },
     };
 
-    try expectMatrixApproxEq(a.inverse(), expected);
+    try utils.expectMatrixApproxEq(a.inverse(), expected);
 }
 
 test "multiplying a product by its inverse" {
@@ -722,7 +713,7 @@ test "multiplying a product by its inverse" {
     const c = a.mult(b);
 
     const result = c.mult(b.inverse());
-    try expectMatrixApproxEq(a, result);
+    try utils.expectMatrixApproxEq(a, result);
 }
 
 test "multiplying by a translation matrix" {
