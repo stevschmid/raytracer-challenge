@@ -46,8 +46,23 @@ const Intersections = struct {
         };
     }
 
+    pub fn hit(self: Self) ?Intersection {
+        std.sort.sort(Intersection, self.list.items, {}, lessThanIntersection);
+
+        const first_hit = for (self.list.items) |intersection| {
+            if (intersection.t >= 0) break intersection;
+        } else null;
+
+        return first_hit;
+    }
+
     pub fn deinit(self: *Self) void {
         self.list.deinit();
+    }
+
+    fn lessThanIntersection(context: void, a: Intersection, b: Intersection) bool {
+        _ = context;
+        return a.t < b.t;
     }
 };
 
@@ -109,8 +124,8 @@ test "a ray intersects sphere at two points" {
     try utils.expectEpsilonEq(@as(f32, 4.0), xs.list.items[0].t);
     try utils.expectEpsilonEq(@as(f32, 6.0), xs.list.items[1].t);
 
-    try std.testing.expect(std.meta.eql(s, xs.list.items[0].object));
-    try std.testing.expect(std.meta.eql(s, xs.list.items[1].object));
+    try std.testing.expectEqual(s, xs.list.items[0].object);
+    try std.testing.expectEqual(s, xs.list.items[1].object);
 }
 
 test "a ray intersects a sphere at a tangent" {
@@ -125,8 +140,8 @@ test "a ray intersects a sphere at a tangent" {
     try utils.expectEpsilonEq(@as(f32, 5.0), xs.list.items[0].t);
     try utils.expectEpsilonEq(@as(f32, 5.0), xs.list.items[1].t);
 
-    try std.testing.expect(std.meta.eql(s, xs.list.items[0].object));
-    try std.testing.expect(std.meta.eql(s, xs.list.items[1].object));
+    try std.testing.expectEqual(s, xs.list.items[0].object);
+    try std.testing.expectEqual(s, xs.list.items[1].object);
 }
 
 test "a ray misses a sphere" {
@@ -151,8 +166,8 @@ test "a ray originates inside a sphere" {
     try utils.expectEpsilonEq(@as(f32, -1.0), xs.list.items[0].t);
     try utils.expectEpsilonEq(@as(f32, 1.0), xs.list.items[1].t);
 
-    try std.testing.expect(std.meta.eql(s, xs.list.items[0].object));
-    try std.testing.expect(std.meta.eql(s, xs.list.items[1].object));
+    try std.testing.expectEqual(s, xs.list.items[0].object);
+    try std.testing.expectEqual(s, xs.list.items[1].object);
 }
 
 test "a sphere is behind a ray" {
@@ -167,6 +182,72 @@ test "a sphere is behind a ray" {
     try utils.expectEpsilonEq(@as(f32, -6.0), xs.list.items[0].t);
     try utils.expectEpsilonEq(@as(f32, -4.0), xs.list.items[1].t);
 
-    try std.testing.expect(std.meta.eql(s, xs.list.items[0].object));
-    try std.testing.expect(std.meta.eql(s, xs.list.items[1].object));
+    try std.testing.expectEqual(s, xs.list.items[0].object);
+    try std.testing.expectEqual(s, xs.list.items[1].object);
+}
+
+test "The hit, when all intersections have positive t" {
+    const s = Sphere{};
+
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+
+    const is1 = Intersection{ .t = 1, .object = s };
+    try xs.list.append(is1);
+
+    const is2 = Intersection{ .t = 2, .object = s };
+    try xs.list.append(is2);
+
+    try std.testing.expectEqual(is1, xs.hit().?);
+}
+
+test "The hit, when some intersections have negative t" {
+    const s = Sphere{};
+
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+
+    const is1 = Intersection{ .t = -1, .object = s };
+    try xs.list.append(is1);
+
+    const is2 = Intersection{ .t = 1, .object = s };
+    try xs.list.append(is2);
+
+    try std.testing.expectEqual(is2, xs.hit().?);
+}
+
+test "The hit, when all intersections have negative t" {
+    const s = Sphere{};
+
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+
+    const is1 = Intersection{ .t = -2, .object = s };
+    try xs.list.append(is1);
+
+    const is2 = Intersection{ .t = -1, .object = s };
+    try xs.list.append(is2);
+
+    try std.testing.expect(xs.hit() == null);
+}
+
+test "The hit is always the lowest nonnegative intersection" {
+    const s = Sphere{};
+
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+
+    const is1 = Intersection{ .t = 5, .object = s };
+    try xs.list.append(is1);
+
+    const is2 = Intersection{ .t = 7, .object = s };
+    try xs.list.append(is2);
+
+    const is3 = Intersection{ .t = -3, .object = s };
+    try xs.list.append(is3);
+
+    const is4 = Intersection{ .t = 2, .object = s };
+    try xs.list.append(is4);
+
+    try std.testing.expectEqual(is4, xs.hit().?);
 }
