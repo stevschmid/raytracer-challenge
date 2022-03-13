@@ -6,23 +6,6 @@ const Canvas = @import("canvas.zig").Canvas;
 const Color = @import("color.zig").Color;
 const canvasToPPM = @import("ppm.zig").canvasToPPM;
 
-const Projectile = struct {
-    pos: Vec4,
-    velocity: Vec4,
-};
-
-const Environment = struct {
-    gravity: Vec4,
-    wind: Vec4,
-};
-
-fn tick(proj: Projectile, env: Environment) Projectile {
-    return .{
-        .pos = proj.pos.add(proj.velocity),
-        .velocity = proj.velocity.add(env.gravity).add(env.wind),
-    };
-}
-
 fn addPointToCanvas(canvas: *Canvas, point: Vec4) void {
     const w = @intToFloat(f32, canvas.width);
     const h = @intToFloat(f32, canvas.height);

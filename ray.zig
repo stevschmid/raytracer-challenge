@@ -10,11 +10,11 @@ const Mat4 = @import("matrix.zig").Mat4;
 const initPoint = vector.initPoint;
 const initVector = vector.initVector;
 
-const Sphere = struct {
+pub const Sphere = struct {
     transform: Mat4 = Mat4.identity(),
 };
 
-const Ray = struct {
+pub const Ray = struct {
     const Self = @This();
 
     origin: Vec4,
@@ -39,12 +39,12 @@ const Ray = struct {
     }
 };
 
-const Intersection = struct {
+pub const Intersection = struct {
     t: f32,
     object: Sphere,
 };
 
-const Intersections = struct {
+pub const Intersections = struct {
     const Self = @This();
 
     allocator: std.mem.Allocator,
@@ -77,7 +77,7 @@ const Intersections = struct {
     }
 };
 
-fn intersect(allocator: std.mem.Allocator, sphere: Sphere, world_ray: Ray) !Intersections {
+pub fn intersect(allocator: std.mem.Allocator, sphere: Sphere, world_ray: Ray) !Intersections {
     var object_space = sphere.transform.inverse();
 
     var ray = world_ray.transform(object_space);
