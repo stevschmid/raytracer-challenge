@@ -1,7 +1,8 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 const epsilonEq = @import("utils.zig").epsilonEq;
-const Vec4 = @import("vector.zig").Vec4;
+const vector = @import("vector.zig");
+const Vec4 = vector.Vec4;
 
 pub const Mat2 = struct {
     const Self = @This();
@@ -110,6 +111,72 @@ pub const Mat4 = struct {
                 .{ 0, 0, 0, 1 },
             },
         };
+    }
+
+    pub fn translate(self: Self, x: f32, y: f32, z: f32) Self {
+        return (Self{
+            .mat = .{
+                .{ 1, 0, 0, x },
+                .{ 0, 1, 0, y },
+                .{ 0, 0, 1, z },
+                .{ 0, 0, 0, 1 },
+            },
+        }).mult(self);
+    }
+
+    pub fn scale(self: Self, x: f32, y: f32, z: f32) Self {
+        return (Self{
+            .mat = .{
+                .{ x, 0, 0, 0 },
+                .{ 0, y, 0, 0 },
+                .{ 0, 0, z, 0 },
+                .{ 0, 0, 0, 1 },
+            },
+        }).mult(self);
+    }
+
+    pub fn rotateX(self: Self, rad: f32) Self {
+        return (Self{
+            .mat = .{
+                .{ 1, 0, 0, 0 },
+                .{ 0, std.math.cos(rad), -std.math.sin(rad), 0 },
+                .{ 0, std.math.sin(rad), std.math.cos(rad), 0 },
+                .{ 0, 0, 0, 1 },
+            },
+        }).mult(self);
+    }
+
+    pub fn rotateY(self: Self, rad: f32) Self {
+        return (Self{
+            .mat = .{
+                .{ std.math.cos(rad), 0, std.math.sin(rad), 0 },
+                .{ 0, 1, 0, 0 },
+                .{ -std.math.sin(rad), 0, std.math.cos(rad), 0 },
+                .{ 0, 0, 0, 1 },
+            },
+        }).mult(self);
+    }
+
+    pub fn rotateZ(self: Self, rad: f32) Self {
+        return (Self{
+            .mat = .{
+                .{ std.math.cos(rad), -std.math.sin(rad), 0, 0 },
+                .{ std.math.sin(rad), std.math.cos(rad), 0, 0 },
+                .{ 0, 0, 1, 0 },
+                .{ 0, 0, 0, 1 },
+            },
+        }).mult(self);
+    }
+
+    pub fn shear(self: Self, xy: f32, xz: f32, yx: f32, yz: f32, zx: f32, zy: f32) Self {
+        return (Self{
+            .mat = .{
+                .{ 1, xy, xz, 0 },
+                .{ yx, 1, yz, 0 },
+                .{ zx, zy, 1, 0 },
+                .{ 0, 0, 0, 1 },
+            },
+        }).mult(self);
     }
 
     pub fn at(self: Self, row: usize, col: usize) f32 {
@@ -656,4 +723,169 @@ test "multiplying a product by its inverse" {
 
     const result = c.mult(b.inverse());
     try expectMatrixApproxEq(a, result);
+}
+
+test "multiplying by a translation matrix" {
+    const transform = Mat4.identity().translate(5, -3, 2);
+    const p = vector.initPoint(-3, 4, 5);
+
+    try std.testing.expect(transform.multVec(p).eql(vector.initPoint(2, 1, 7)));
+}
+
+test "multiplying by the inverse of a translation matrix" {
+    const transform = Mat4.identity().translate(5, -3, 2);
+    const inv = transform.inverse();
+    const p = vector.initPoint(-3, 4, 5);
+
+    try std.testing.expect(inv.multVec(p).eql(vector.initPoint(-8, 7, 3)));
+}
+
+test "translation does not affect vectors" {
+    const transform = Mat4.identity().translate(5, -3, 2);
+    const v = vector.initVector(-3, 4, 5);
+
+    try std.testing.expect(transform.multVec(v).eql(v));
+}
+
+test "a scaling matrix applied to a point" {
+    const transform = Mat4.identity().scale(2, 3, 4);
+    const p = vector.initPoint(-4, 6, 8);
+
+    try std.testing.expect(transform.multVec(p).eql(vector.initPoint(-8, 18, 32)));
+}
+
+test "a scaling matrix applied to a vector" {
+    const transform = Mat4.identity().scale(2, 3, 4);
+    const v = vector.initVector(-4, 6, 8);
+
+    try std.testing.expect(transform.multVec(v).eql(vector.initVector(-8, 18, 32)));
+}
+
+test "multiplying by the inverse of a scaling matrix" {
+    const transform = Mat4.identity().scale(2, 3, 4);
+    const inv = transform.inverse();
+    const v = vector.initVector(-4, 6, 8);
+
+    try std.testing.expect(inv.multVec(v).eql(vector.initVector(-2, 2, 2)));
+}
+
+test "reflection is scaling by a negative value" {
+    const transform = Mat4.identity().scale(-1, 1, 1);
+    const p = vector.initPoint(2, 3, 4);
+
+    try std.testing.expect(transform.multVec(p).eql(vector.initPoint(-2, 3, 4)));
+}
+
+test "rotating a point around the x axis" {
+    const p = vector.initPoint(0, 1, 0);
+
+    const half_quarter = Mat4.identity().rotateX(std.math.pi / 4.0);
+    const full_quarter = Mat4.identity().rotateX(std.math.pi / 2.0);
+
+    try std.testing.expect(half_quarter.multVec(p).eql(vector.initPoint(0, std.math.sqrt(2.0) / 2.0, std.math.sqrt(2.0) / 2.0)));
+    try std.testing.expect(full_quarter.multVec(p).eql(vector.initPoint(0, 0, 1)));
+}
+
+test "the inverse of an x-rotation rotates in the opposite direction" {
+    const p = vector.initPoint(0, 1, 0);
+    const half_quarter = Mat4.identity().rotateX(std.math.pi / 4.0);
+    const inv = half_quarter.inverse();
+
+    try std.testing.expect(inv.multVec(p).eql(vector.initPoint(0, std.math.sqrt(2.0) / 2.0, -std.math.sqrt(2.0) / 2.0)));
+}
+
+test "rotating a point around the y axis" {
+    const p = vector.initPoint(0, 0, 1);
+
+    const half_quarter = Mat4.identity().rotateY(std.math.pi / 4.0);
+    const full_quarter = Mat4.identity().rotateY(std.math.pi / 2.0);
+
+    try std.testing.expect(half_quarter.multVec(p).eql(vector.initPoint(std.math.sqrt(2.0) / 2.0, 0, std.math.sqrt(2.0) / 2.0)));
+    try std.testing.expect(full_quarter.multVec(p).eql(vector.initPoint(1, 0, 0)));
+}
+
+test "rotating a point around the z axis" {
+    const p = vector.initPoint(0, 1, 0);
+
+    const half_quarter = Mat4.identity().rotateZ(std.math.pi / 4.0);
+    const full_quarter = Mat4.identity().rotateZ(std.math.pi / 2.0);
+
+    try std.testing.expect(half_quarter.multVec(p).eql(vector.initPoint(-std.math.sqrt(2.0) / 2.0, std.math.sqrt(2.0) / 2.0, 0)));
+    try std.testing.expect(full_quarter.multVec(p).eql(vector.initPoint(-1, 0, 0)));
+}
+
+test "shearing" {
+    const p = vector.initPoint(2, 3, 4);
+
+    {
+        // x moves in proportion to y
+        const transform = Mat4.identity().shear(1, 0, 0, 0, 0, 0);
+        try std.testing.expect(transform.multVec(p).eql(vector.initPoint(5, 3, 4)));
+    }
+
+    {
+        // x moves in proportion to z
+        const transform = Mat4.identity().shear(0, 1, 0, 0, 0, 0);
+        try std.testing.expect(transform.multVec(p).eql(vector.initPoint(6, 3, 4)));
+    }
+
+    {
+        // y moves in proportion to x
+        const transform = Mat4.identity().shear(0, 0, 1, 0, 0, 0);
+        try std.testing.expect(transform.multVec(p).eql(vector.initPoint(2, 5, 4)));
+    }
+
+    {
+        // y moves in proportion to z
+        const transform = Mat4.identity().shear(0, 0, 0, 1, 0, 0);
+        try std.testing.expect(transform.multVec(p).eql(vector.initPoint(2, 7, 4)));
+    }
+
+    {
+        // z moves in proportion to x
+        const transform = Mat4.identity().shear(0, 0, 0, 0, 1, 0);
+        try std.testing.expect(transform.multVec(p).eql(vector.initPoint(2, 3, 6)));
+    }
+
+    {
+        // z moves in proportion to y
+        const transform = Mat4.identity().shear(0, 0, 0, 0, 0, 1);
+        try std.testing.expect(transform.multVec(p).eql(vector.initPoint(2, 3, 7)));
+    }
+}
+
+test "individual transformations are applied in sequence" {
+    const p = vector.initPoint(1, 0, 1);
+
+    const a = Mat4.identity().rotateX(std.math.pi / 2.0);
+    const b = Mat4.identity().scale(5, 5, 5);
+    const c = Mat4.identity().translate(10, 5, 7);
+
+    const p2 = a.multVec(p);
+    const p3 = b.multVec(p2);
+    const p4 = c.multVec(p3);
+
+    try std.testing.expect(p4.eql(vector.initPoint(15, 0, 7)));
+}
+
+test "chained transformations must be applied in reverse order" {
+    const p = vector.initPoint(1, 0, 1);
+
+    {
+        const a = Mat4.identity().rotateX(std.math.pi / 2.0);
+        const b = Mat4.identity().scale(5, 5, 5);
+        const c = Mat4.identity().translate(10, 5, 7);
+
+        const t = c.mult(b).mult(a);
+        try std.testing.expect(t.multVec(p).eql(vector.initPoint(15, 0, 7)));
+    }
+
+    {
+        // fllent API
+        const t = Mat4.identity()
+            .rotateX(std.math.pi / 2.0)
+            .scale(5, 5, 5)
+            .translate(10, 5, 7);
+        try std.testing.expect(t.multVec(p).eql(vector.initPoint(15, 0, 7)));
+    }
 }
