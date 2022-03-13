@@ -5,10 +5,14 @@ const utils = @import("utils.zig");
 const vector = @import("vector.zig");
 const Vec4 = vector.Vec4;
 
+const Mat4 = @import("matrix.zig").Mat4;
+
 const initPoint = vector.initPoint;
 const initVector = vector.initVector;
 
-const Sphere = struct {};
+const Sphere = struct {
+    transform: Mat4 = Mat4.identity(),
+};
 
 const Ray = struct {
     const Self = @This();
@@ -25,6 +29,13 @@ const Ray = struct {
 
     pub fn position(self: Self, t: f32) Vec4 {
         return self.origin.add(self.direction.scale(t));
+    }
+
+    pub fn transform(self: Self, mat: Mat4) Self {
+        return Self{
+            .origin = mat.multVec(self.origin),
+            .direction = mat.multVec(self.direction),
+        };
     }
 };
 
@@ -66,9 +77,10 @@ const Intersections = struct {
     }
 };
 
-fn intersect(allocator: std.mem.Allocator, sphere: Sphere, ray: Ray) !Intersections {
-    _ = sphere;
+fn intersect(allocator: std.mem.Allocator, sphere: Sphere, world_ray: Ray) !Intersections {
+    var object_space = sphere.transform.inverse();
 
+    var ray = world_ray.transform(object_space);
     var res = Intersections.init(allocator);
     errdefer res.deinit();
 
@@ -250,4 +262,58 @@ test "The hit is always the lowest nonnegative intersection" {
     try xs.list.append(is4);
 
     try std.testing.expectEqual(is4, xs.hit().?);
+}
+
+test "Translating a ray" {
+    const r = Ray.init(initPoint(1, 2, 3), initVector(0, 1, 0));
+    const m = Mat4.identity().translate(3, 4, 5);
+
+    const r2 = r.transform(m);
+
+    try std.testing.expect(r2.origin.eql(initPoint(4, 6, 8)));
+    try std.testing.expect(r2.direction.eql(initVector(0, 1, 0)));
+}
+
+test "Scaling a ray" {
+    const r = Ray.init(initPoint(1, 2, 3), initVector(0, 1, 0));
+    const m = Mat4.identity().scale(2, 3, 4);
+
+    const r2 = r.transform(m);
+
+    try std.testing.expect(r2.origin.eql(initPoint(2, 6, 12)));
+    try std.testing.expect(r2.direction.eql(initVector(0, 3, 0)));
+}
+
+test "A sphere's default transformation" {
+    const s = Sphere{};
+    try std.testing.expect(s.transform.eql(Mat4.identity()));
+}
+
+test "Changing a sphere's transformation" {
+    var s = Sphere{};
+    s.transform = Mat4.identity().translate(2, 3, 4);
+    try std.testing.expect(s.transform.eql(Mat4.identity().translate(2, 3, 4)));
+}
+
+test "Intersecting a scaled sphere with a ray" {
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
+    const s = Sphere{ .transform = Mat4.identity().scale(2, 2, 2) };
+
+    var xs = try intersect(alloc, s, r);
+    defer xs.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
+
+    try utils.expectEpsilonEq(@as(f32, 3.0), xs.list.items[0].t);
+    try utils.expectEpsilonEq(@as(f32, 7.0), xs.list.items[1].t);
+}
+
+test "Intersecting a translated sphere with a ray" {
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
+    const s = Sphere{ .transform = Mat4.identity().translate(5, 0, 0) };
+
+    var xs = try intersect(alloc, s, r);
+    defer xs.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), xs.list.items.len);
 }
