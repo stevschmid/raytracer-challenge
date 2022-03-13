@@ -1,17 +1,18 @@
 const std = @import("std");
-const Tuple = @import("tuple.zig").Tuple;
+const vector = @import("vector.zig");
+const Vec4 = vector.Vec4;
 const Canvas = @import("canvas.zig").Canvas;
 const Color = @import("color.zig").Color;
 const canvasToPPM = @import("ppm.zig").canvasToPPM;
 
 const Projectile = struct {
-    pos: Tuple,
-    velocity: Tuple,
+    pos: Vec4,
+    velocity: Vec4,
 };
 
 const Environment = struct {
-    gravity: Tuple,
-    wind: Tuple,
+    gravity: Vec4,
+    wind: Vec4,
 };
 
 fn tick(proj: Projectile, env: Environment) Projectile {
@@ -27,13 +28,13 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const e = Environment{
-        .gravity = Tuple.initVector(0, -0.1, 0),
-        .wind = Tuple.initVector(-0.01, 0, 0),
+        .gravity = vector.initVector(0, -0.1, 0),
+        .wind = vector.initVector(-0.01, 0, 0),
     };
 
     var p = Projectile{
-        .pos = Tuple.initPoint(0, 1, 0),
-        .velocity = Tuple.initVector(1, 1.8, 0).normalize().scale(11.25),
+        .pos = vector.initPoint(0, 1, 0),
+        .velocity = vector.initVector(1, 1.8, 0).normalize().scale(11.25),
     };
 
     var canvas = try Canvas.init(allocator, 900, 550);
