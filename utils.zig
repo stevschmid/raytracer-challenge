@@ -23,3 +23,9 @@ pub fn expectVec4ApproxEq(expected: anytype, actual: @TypeOf(expected)) !void {
     try std.testing.expectApproxEqAbs(expected.z, actual.z, 0.00001);
     try std.testing.expectApproxEqAbs(expected.w, actual.w, 0.00001);
 }
+
+pub fn expectColorApproxEq(expected: anytype, actual: @TypeOf(expected)) !void {
+    try std.testing.expectApproxEqAbs(expected.red, actual.red, 0.0001);
+    try std.testing.expectApproxEqAbs(expected.green, actual.green, 0.0001);
+    try std.testing.expectApproxEqAbs(expected.blue, actual.blue, 0.0001);
+}

@@ -8,6 +8,9 @@ pub const Color = struct {
     green: f32,
     blue: f32,
 
+    pub const Black = Self.init(0, 0, 0);
+    pub const White = Self.init(1, 1, 1);
+
     pub fn init(red: f32, green: f32, blue: f32) Self {
         return .{
             .red = red,
@@ -40,9 +43,9 @@ pub const Color = struct {
 
     pub fn scale(self: Self, scalar: f32) Self {
         return .{
-            .r = scalar * self.red,
-            .g = scalar * self.green,
-            .b = scalar * self.blue,
+            .red = scalar * self.red,
+            .green = scalar * self.green,
+            .blue = scalar * self.blue,
         };
     }
 
