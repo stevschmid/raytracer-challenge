@@ -8,7 +8,7 @@ const canvasToPPM = @import("ppm.zig").canvasToPPM;
 
 const Sphere = @import("sphere.zig").Sphere;
 const Ray = @import("ray.zig").Ray;
-const intersect = @import("ray.zig").intersect;
+const calc = @import("calc.zig");
 
 const CanvasSize = 400;
 
@@ -43,7 +43,7 @@ pub fn main() !void {
             const wall_pos = vector.initPoint(world_x, world_y, wall_z);
             const ray = Ray.init(origin, wall_pos.sub(origin).normalize());
 
-            var xs = try intersect(allocator, shape, ray);
+            var xs = try calc.intersect(allocator, shape, ray);
             defer xs.deinit();
 
             const hit = xs.hit();
