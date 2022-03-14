@@ -42,11 +42,11 @@ pub const World = struct {
                 .specular = 0.2,
             },
         };
+        try world.objects.append(s1);
+
         const s2 = Sphere{
             .transform = Mat4.identity().scale(0.5, 0.5, 0.5),
         };
-
-        try world.objects.append(s1);
         try world.objects.append(s2);
 
         return world;

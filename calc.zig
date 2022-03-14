@@ -467,3 +467,178 @@ test "Intersect a world with a ray" {
     try utils.expectEpsilonEq(@as(f32, 5.5), xs.list.items[2].t);
     try utils.expectEpsilonEq(@as(f32, 6.0), xs.list.items[3].t);
 }
+
+const Computations = struct {
+    t: f32,
+    object: Sphere,
+    point: Vec4,
+    eyev: Vec4,
+    normalv: Vec4,
+    inside: bool,
+};
+
+pub fn prepareComputations(intersection: Intersection, ray: Ray) Computations {
+    const point = ray.position(intersection.t);
+    const eyev = ray.direction.negate();
+
+    var inside = false;
+    var normalv = sphereNormalAt(intersection.object, point);
+
+    if (normalv.dot(eyev) < 0) {
+        inside = true;
+        normalv = normalv.negate();
+    }
+
+    return Computations{
+        .t = intersection.t,
+        .object = intersection.object,
+        .point = point,
+        .eyev = eyev,
+        .normalv = normalv,
+        .inside = inside,
+    };
+}
+
+test "Precomputing the state of an intersection" {
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
+    const shape = Sphere{};
+    const i = Intersection{
+        .t = 4,
+        .object = shape,
+    };
+
+    const comps = prepareComputations(i, r);
+
+    try std.testing.expectEqual(@as(f32, 4.0), comps.t);
+    try std.testing.expectEqual(shape, comps.object);
+    try std.testing.expectEqual(initPoint(0, 0, -1), comps.point);
+    try std.testing.expectEqual(initVector(0, 0, -1), comps.eyev);
+    try std.testing.expectEqual(initVector(0, 0, -1), comps.normalv);
+}
+
+test "The hit, when an intersection occurs on the outside" {
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
+    const shape = Sphere{};
+    const i = Intersection{
+        .t = 4,
+        .object = shape,
+    };
+
+    const comps = prepareComputations(i, r);
+    try std.testing.expectEqual(false, comps.inside);
+}
+
+test "The hit, when an intersection occurs on the inside" {
+    const r = Ray.init(initPoint(0, 0, 0), initVector(0, 0, 1));
+    const shape = Sphere{};
+    const i = Intersection{
+        .t = 1,
+        .object = shape,
+    };
+
+    const comps = prepareComputations(i, r);
+    try std.testing.expectEqual(initPoint(0, 0, 1), comps.point);
+    try std.testing.expectEqual(initVector(0, 0, -1), comps.eyev);
+    try std.testing.expectEqual(true, comps.inside);
+    try std.testing.expectEqual(initVector(0, 0, -1), comps.normalv);
+}
+
+pub fn shadeHit(world: World, comps: Computations) Color {
+    return lighting(
+        comps.object.material,
+        world.light,
+        comps.point,
+        comps.eyev,
+        comps.normalv,
+    );
+}
+
+test "Shading an intersection" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
+    const shape = w.objects.items[0];
+    const i = Intersection{
+        .t = 4,
+        .object = shape,
+    };
+
+    const comps = prepareComputations(i, r);
+    const c = shadeHit(w, comps);
+
+    try utils.expectColorApproxEq(Color.init(0.38066, 0.47583, 0.2855), c);
+}
+
+test "Shading an intersection from the inside" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    w.light = PointLight{
+        .position = initPoint(0, 0.25, 0),
+        .intensity = Color.White,
+    };
+
+    const r = Ray.init(initPoint(0, 0, 0), initVector(0, 0, 1));
+    const shape = w.objects.items[1];
+    const i = Intersection{
+        .t = 0.5,
+        .object = shape,
+    };
+
+    const comps = prepareComputations(i, r);
+    const c = shadeHit(w, comps);
+
+    try utils.expectColorApproxEq(Color.init(0.90498, 0.90498, 0.90498), c);
+}
+
+pub fn worldColorAt(allocator: std.mem.Allocator, world: World, ray: Ray) !Color {
+    var xs = try intersectWorld(allocator, world, ray);
+    defer xs.deinit();
+
+    const hit = xs.hit();
+    if (hit != null) {
+        const comps = prepareComputations(hit.?, ray);
+        return shadeHit(world, comps);
+    } else {
+        return Color.Black;
+    }
+}
+
+test "The color when a ray misses" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 1, 0));
+
+    const c = try worldColorAt(alloc, w, r);
+    try utils.expectColorApproxEq(Color.init(0, 0, 0), c);
+}
+
+test "The color when a ray hits" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
+
+    const c = try worldColorAt(alloc, w, r);
+    try utils.expectColorApproxEq(Color.init(0.38066, 0.47583, 0.2855), c);
+}
+
+test "The color with an intersection behind the ray" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    var outer = &w.objects.items[0];
+    outer.material.color = Color.init(0.3, 0.3, 1.0);
+    outer.material.ambient = 1.0;
+
+    var inner = &w.objects.items[1];
+    inner.material.color = Color.init(0.5, 1.0, 0.2);
+    inner.material.ambient = 1.0;
+
+    const r = Ray.init(initPoint(0, 0, 0.75), initVector(0, 0, -1));
+
+    const c = try worldColorAt(alloc, w, r);
+    try utils.expectColorApproxEq(inner.material.color, c);
+}
