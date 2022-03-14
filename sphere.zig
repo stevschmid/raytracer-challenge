@@ -1,61 +1,101 @@
 const std = @import("std");
+
+const utils = @import("utils.zig");
+
 const vector = @import("vector.zig");
 const Vec4 = vector.Vec4;
+
 const Mat4 = @import("matrix.zig").Mat4;
-const Canvas = @import("canvas.zig").Canvas;
-const Color = @import("color.zig").Color;
-const canvasToPPM = @import("ppm.zig").canvasToPPM;
+const Material = @import("material.zig").Material;
 
-const Sphere = @import("ray.zig").Sphere;
-const Ray = @import("ray.zig").Ray;
-const intersect = @import("ray.zig").intersect;
+const initPoint = vector.initPoint;
+const initVector = vector.initVector;
 
-const CanvasSize = 400;
+pub const Sphere = struct {
+    const Self = @This();
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    transform: Mat4 = Mat4.identity(),
+    material: Material = .{},
 
-    var canvas = try Canvas.init(allocator, CanvasSize, CanvasSize);
-    defer canvas.deinit();
+    pub fn normalAt(self: Self, world_point: Vec4) Vec4 {
+        const object_space = self.transform.inverse();
+        const object_point = object_space.multVec(world_point);
 
-    const color = Color.init(1, 0, 0);
-    const shape = Sphere{
-        .transform = Mat4.identity(),
-    };
-    const origin = vector.initPoint(0, 0, -5);
+        const object_normal = object_point.sub(initPoint(0, 0, 0)).normalize();
 
-    const wall_z = 10.0;
-    const wall_size: f32 = 7.0;
-    const pixel_size = wall_size / @intToFloat(f32, CanvasSize);
-    const half = 0.5 * wall_size;
+        var world_normal = object_space.transpose().multVec(object_normal);
+        world_normal.w = 0; // or use 3x3 submatrix without translation above
 
-    var y: usize = 0;
-    while (y < canvas.height) : (y += 1) {
-        const world_y = half - @intToFloat(f32, y) * pixel_size;
-
-        var x: usize = 0;
-        while (x < canvas.height) : (x += 1) {
-            _ = 1;
-
-            const world_x = -half + @intToFloat(f32, x) * pixel_size;
-            const wall_pos = vector.initPoint(world_x, world_y, wall_z);
-            const ray = Ray.init(origin, wall_pos.sub(origin).normalize());
-
-            var xs = try intersect(allocator, shape, ray);
-            defer xs.deinit();
-
-            const hit = xs.hit();
-            if (hit != null) {
-                canvas.set(x, y, color);
-            }
-        }
+        return world_normal.normalize();
     }
+};
 
-    const dir: std.fs.Dir = std.fs.cwd();
-    const file: std.fs.File = try dir.createFile("/tmp/result.ppm", .{});
-    defer file.close();
+test "A sphere's default transformation" {
+    const s = Sphere{};
+    try std.testing.expect(s.transform.eql(Mat4.identity()));
+}
 
-    try canvasToPPM(canvas, file.writer());
+test "Changing a sphere's transformation" {
+    var s = Sphere{};
+    s.transform = Mat4.identity().translate(2, 3, 4);
+    try std.testing.expect(s.transform.eql(Mat4.identity().translate(2, 3, 4)));
+}
+
+test "The normal on a sphere at a point on the x axis" {
+    const s = Sphere{};
+    const n = s.normalAt(initPoint(1, 0, 0));
+    try std.testing.expect(n.eql(initVector(1, 0, 0)));
+}
+
+test "The normal on a sphere at a point on the y axis" {
+    const s = Sphere{};
+    const n = s.normalAt(initPoint(0, 1, 0));
+    try std.testing.expect(n.eql(initVector(0, 1, 0)));
+}
+
+test "The normal on a sphere at a point on the z axis" {
+    const s = Sphere{};
+    const n = s.normalAt(initPoint(0, 0, 1));
+    try std.testing.expect(n.eql(initVector(0, 0, 1)));
+}
+
+test "The normal on a sphere at a point at a nonaxial point" {
+    const s = Sphere{};
+    const k = std.math.sqrt(3.0) / 3.0;
+    const n = s.normalAt(initPoint(k, k, k));
+    try std.testing.expect(n.eql(initVector(k, k, k)));
+    try std.testing.expect(n.eql(n.normalize()));
+}
+
+test "Computing the normal on a translated sphere" {
+    const s = Sphere{
+        .transform = Mat4.identity().translate(0, 1, 0),
+    };
+
+    const n = s.normalAt(initPoint(0, 1.70711, -0.70711));
+    try utils.expectVec4ApproxEq(n, initVector(0, 0.70711, -0.70711));
+}
+
+test "Computing the normal on a translated sphere" {
+    const s = Sphere{
+        .transform = Mat4.identity()
+            .rotateZ(std.math.pi / 5.0)
+            .scale(1, 0.5, 1),
+    };
+
+    const n = s.normalAt(initPoint(0, std.math.sqrt(2.0) / 2.0, -std.math.sqrt(2.0) / 2.0));
+    try utils.expectVec4ApproxEq(n, initVector(0, 0.97014, -0.24254));
+}
+
+test "A sphere has a default material" {
+    const s = Sphere{};
+    try std.testing.expectEqual(Material{}, s.material);
+}
+
+test "A sphere may be assigned a material" {
+    const m = Material{
+        .ambient = 1.0,
+    };
+    const s = Sphere{ .material = m };
+    try std.testing.expectEqual(m, s.material);
 }

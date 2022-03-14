@@ -110,6 +110,11 @@ pub const Vec4 = struct {
             self.x * other.y - self.y * other.x,
         );
     }
+
+    pub fn reflect(self: Self, normal: Self) Self {
+        const dp = self.dot(normal);
+        return self.sub(normal.scale(2.0 * dp));
+    }
 };
 
 test "point / vector" {
@@ -235,4 +240,20 @@ test "cross product" {
 
     try std.testing.expect(a.cross(b).eql(initVector(-1, 2, -1)));
     try std.testing.expect(b.cross(a).eql(initVector(1, -2, 1)));
+}
+
+test "reflecting a vector approaching 45°" {
+    const v = initVector(1, -1, 0);
+    const n = initVector(0, 1, 0);
+    const r = v.reflect(n);
+
+    try std.testing.expect(r.eql(initVector(1, 1, 0)));
+}
+
+test "reflecting a vector off a slanted surface" {
+    const v = initVector(0, -1, 0);
+    const n = initVector(1, 1, 0).normalize();
+    const r = v.reflect(n);
+
+    try std.testing.expect(r.eql(initVector(1, 0, 0)));
 }
