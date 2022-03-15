@@ -9,8 +9,8 @@ const Color = @import("color.zig").Color;
 pub const PointLight = struct {
     const Self = @This();
 
-    position: Vec4,
-    intensity: Color,
+    position: Vec4 = initPoint(0, 0, 0),
+    intensity: Color = Color.White,
 };
 
 test "A point has light as a position and intensity" {

@@ -642,3 +642,59 @@ test "The color with an intersection behind the ray" {
     const c = try worldColorAt(alloc, w, r);
     try utils.expectColorApproxEq(inner.material.color, c);
 }
+
+pub fn viewTransform(from: Vec4, to: Vec4, up: Vec4) Mat4 {
+    const forward = to.sub(from).normalize();
+    const left = forward.cross(up.normalize());
+    const true_up = left.cross(forward);
+
+    const orientation = Mat4{
+        .mat = .{
+            .{ left.x, left.y, left.z, 0 },
+            .{ true_up.x, true_up.y, true_up.z, 0 },
+            .{ -forward.x, -forward.y, -forward.z, 0 },
+            .{ 0, 0, 0, 1 },
+        },
+    };
+
+    const translation = Mat4.identity().translate(-from.x, -from.y, -from.z);
+
+    return orientation.mult(translation);
+}
+
+test "The transformation matrix for the default orientiation" {
+    const from = initPoint(0, 0, 0);
+    const to = initPoint(0, 0, -1);
+    const up = initVector(0, 1, 0);
+
+    const t = viewTransform(from, to, up);
+
+    try utils.expectMatrixApproxEq(t, Mat4.identity());
+}
+
+test "The view transformation moves the world" {
+    const from = initPoint(0, 0, 8);
+    const to = initPoint(0, 0, 0);
+    const up = initVector(0, 1, 0);
+
+    const t = viewTransform(from, to, up);
+
+    try utils.expectMatrixApproxEq(t, Mat4.identity().translate(0, 0, -8));
+}
+
+test "An arbitrary view transformation" {
+    const from = initPoint(1, 3, 2);
+    const to = initPoint(4, -2, 8);
+    const up = initVector(1, 1, 0);
+
+    const t = viewTransform(from, to, up);
+
+    try utils.expectMatrixApproxEq(t, Mat4{
+        .mat = .{
+            .{ -0.50709, 0.50709, 0.67612, -2.36643 },
+            .{ 0.76772, 0.60609, 0.12122, -2.82843 },
+            .{ -0.35857, 0.59761, -0.71714, 0.00000 },
+            .{ 0.00000, 0.00000, 0.00000, 1.00000 },
+        },
+    });
+}

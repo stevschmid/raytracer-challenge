@@ -19,11 +19,11 @@ pub const World = struct {
     objects: std.ArrayList(Sphere),
     light: PointLight,
 
-    pub fn init(allocator: std.mem.Allocator, light: PointLight) Self {
+    pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .allocator = allocator,
             .objects = std.ArrayList(Sphere).init(allocator),
-            .light = light,
+            .light = .{},
         };
     }
 
