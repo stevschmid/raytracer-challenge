@@ -9,260 +9,16 @@ const initVector = @import("vector.zig").initVector;
 const initPoint = @import("vector.zig").initPoint;
 
 const World = @import("world.zig").World;
-const Sphere = @import("sphere.zig").Sphere;
+const Shape = @import("shape.zig").Shape;
+
 const Ray = @import("ray.zig").Ray;
+const Intersections = @import("ray.zig").Intersections;
+const Intersection = @import("ray.zig").Intersection;
+
 const Material = @import("material.zig").Material;
 const PointLight = @import("light.zig").PointLight;
 
-pub const Intersection = struct {
-    t: f64,
-    object: Sphere,
-};
-
-pub const Intersections = struct {
-    const Self = @This();
-
-    allocator: std.mem.Allocator,
-    list: std.ArrayList(Intersection),
-
-    pub fn init(allocator: std.mem.Allocator) Self {
-        return .{
-            .allocator = allocator,
-            .list = std.ArrayList(Intersection).init(allocator),
-        };
-    }
-
-    pub fn hit(self: Self) ?Intersection {
-        std.sort.sort(Intersection, self.list.items, {}, lessThanIntersection);
-
-        const first_hit = for (self.list.items) |intersection| {
-            if (intersection.t >= 0) break intersection;
-        } else null;
-
-        return first_hit;
-    }
-
-    pub fn deinit(self: *Self) void {
-        self.list.deinit();
-    }
-
-    fn lessThanIntersection(context: void, a: Intersection, b: Intersection) bool {
-        _ = context;
-        return a.t < b.t;
-    }
-};
-
-pub fn intersectSphere(allocator: std.mem.Allocator, sphere: Sphere, world_ray: Ray) !Intersections {
-    var object_space = sphere.transform.inverse();
-
-    var ray = world_ray.transform(object_space);
-    var res = Intersections.init(allocator);
-    errdefer res.deinit();
-
-    const sphere_to_ray = ray.origin.sub(initPoint(0, 0, 0));
-
-    const a = ray.direction.dot(ray.direction);
-    const b = 2.0 * ray.direction.dot(sphere_to_ray);
-    const c = sphere_to_ray.dot(sphere_to_ray) - 1.0;
-
-    const discriminant = b * b - 4 * a * c;
-
-    if (discriminant < 0) // ray misses
-        return res;
-
-    const t1 = (-b - std.math.sqrt(discriminant)) / (2 * a);
-    const t2 = (-b + std.math.sqrt(discriminant)) / (2 * a);
-
-    try res.list.append(.{ .t = t1, .object = sphere });
-    try res.list.append(.{ .t = t2, .object = sphere });
-
-    return res;
-}
-
 const alloc = std.testing.allocator;
-
-test "a ray intersects sphere at two points" {
-    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const s = Sphere{};
-
-    var xs = try intersectSphere(alloc, s, r);
-    defer xs.deinit();
-
-    try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
-
-    try utils.expectEpsilonEq(@as(f64, 4.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f64, 6.0), xs.list.items[1].t);
-
-    try std.testing.expectEqual(s, xs.list.items[0].object);
-    try std.testing.expectEqual(s, xs.list.items[1].object);
-}
-
-test "a ray intersects a sphere at a tangent" {
-    const r = Ray.init(initPoint(0, 1, -5), initVector(0, 0, 1));
-    const s = Sphere{};
-
-    var xs = try intersectSphere(alloc, s, r);
-    defer xs.deinit();
-
-    try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
-
-    try utils.expectEpsilonEq(@as(f64, 5.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f64, 5.0), xs.list.items[1].t);
-
-    try std.testing.expectEqual(s, xs.list.items[0].object);
-    try std.testing.expectEqual(s, xs.list.items[1].object);
-}
-
-test "a ray misses a sphere" {
-    const r = Ray.init(initPoint(0, 2, -5), initVector(0, 0, 1));
-    const s = Sphere{};
-
-    var xs = try intersectSphere(alloc, s, r);
-    defer xs.deinit();
-
-    try std.testing.expectEqual(@as(usize, 0), xs.list.items.len);
-}
-
-test "a ray originates inside a sphere" {
-    const r = Ray.init(initPoint(0, 0, 0), initVector(0, 0, 1));
-    const s = Sphere{};
-
-    var xs = try intersectSphere(alloc, s, r);
-    defer xs.deinit();
-
-    try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
-
-    try utils.expectEpsilonEq(@as(f64, -1.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f64, 1.0), xs.list.items[1].t);
-
-    try std.testing.expectEqual(s, xs.list.items[0].object);
-    try std.testing.expectEqual(s, xs.list.items[1].object);
-}
-
-test "a sphere is behind a ray" {
-    const r = Ray.init(initPoint(0, 0, 5), initVector(0, 0, 1));
-    const s = Sphere{};
-
-    var xs = try intersectSphere(alloc, s, r);
-    defer xs.deinit();
-
-    try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
-
-    try utils.expectEpsilonEq(@as(f64, -6.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f64, -4.0), xs.list.items[1].t);
-
-    try std.testing.expectEqual(s, xs.list.items[0].object);
-    try std.testing.expectEqual(s, xs.list.items[1].object);
-}
-
-test "The hit, when all intersections have positive t" {
-    const s = Sphere{};
-
-    var xs = Intersections.init(alloc);
-    defer xs.deinit();
-
-    const is1 = Intersection{ .t = 1, .object = s };
-    try xs.list.append(is1);
-
-    const is2 = Intersection{ .t = 2, .object = s };
-    try xs.list.append(is2);
-
-    try std.testing.expectEqual(is1, xs.hit().?);
-}
-
-test "The hit, when some intersections have negative t" {
-    const s = Sphere{};
-
-    var xs = Intersections.init(alloc);
-    defer xs.deinit();
-
-    const is1 = Intersection{ .t = -1, .object = s };
-    try xs.list.append(is1);
-
-    const is2 = Intersection{ .t = 1, .object = s };
-    try xs.list.append(is2);
-
-    try std.testing.expectEqual(is2, xs.hit().?);
-}
-
-test "The hit, when all intersections have negative t" {
-    const s = Sphere{};
-
-    var xs = Intersections.init(alloc);
-    defer xs.deinit();
-
-    const is1 = Intersection{ .t = -2, .object = s };
-    try xs.list.append(is1);
-
-    const is2 = Intersection{ .t = -1, .object = s };
-    try xs.list.append(is2);
-
-    try std.testing.expect(xs.hit() == null);
-}
-
-test "The hit is always the lowest nonnegative intersection" {
-    const s = Sphere{};
-
-    var xs = Intersections.init(alloc);
-    defer xs.deinit();
-
-    const is1 = Intersection{ .t = 5, .object = s };
-    try xs.list.append(is1);
-
-    const is2 = Intersection{ .t = 7, .object = s };
-    try xs.list.append(is2);
-
-    const is3 = Intersection{ .t = -3, .object = s };
-    try xs.list.append(is3);
-
-    const is4 = Intersection{ .t = 2, .object = s };
-    try xs.list.append(is4);
-
-    try std.testing.expectEqual(is4, xs.hit().?);
-}
-
-test "Translating a ray" {
-    const r = Ray.init(initPoint(1, 2, 3), initVector(0, 1, 0));
-    const m = Mat4.identity().translate(3, 4, 5);
-
-    const r2 = r.transform(m);
-
-    try std.testing.expect(r2.origin.eql(initPoint(4, 6, 8)));
-    try std.testing.expect(r2.direction.eql(initVector(0, 1, 0)));
-}
-
-test "Scaling a ray" {
-    const r = Ray.init(initPoint(1, 2, 3), initVector(0, 1, 0));
-    const m = Mat4.identity().scale(2, 3, 4);
-
-    const r2 = r.transform(m);
-
-    try std.testing.expect(r2.origin.eql(initPoint(2, 6, 12)));
-    try std.testing.expect(r2.direction.eql(initVector(0, 3, 0)));
-}
-
-test "Intersecting a scaled sphere with a ray" {
-    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const s = Sphere{ .transform = Mat4.identity().scale(2, 2, 2) };
-
-    var xs = try intersectSphere(alloc, s, r);
-    defer xs.deinit();
-
-    try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
-
-    try utils.expectEpsilonEq(@as(f64, 3.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f64, 7.0), xs.list.items[1].t);
-}
-
-test "Intersecting a translated sphere with a ray" {
-    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const s = Sphere{ .transform = Mat4.identity().translate(5, 0, 0) };
-
-    var xs = try intersectSphere(alloc, s, r);
-    defer xs.deinit();
-
-    try std.testing.expectEqual(@as(usize, 0), xs.list.items.len);
-}
 
 pub fn lighting(material: Material, light: PointLight, position: Vec4, eyev: Vec4, normalv: Vec4, in_shadow: bool) Color {
     // combine surface color with light color/intensity
@@ -398,7 +154,7 @@ pub fn intersectWorld(allocator: std.mem.Allocator, world: World, world_ray: Ray
     errdefer total_intersections.deinit();
 
     for (world.objects.items) |object| {
-        var object_intersections = try intersectSphere(allocator, object, world_ray);
+        var object_intersections = try object.intersect(allocator, world_ray);
         defer object_intersections.deinit();
 
         try total_intersections.list.appendSlice(object_intersections.list.items);
@@ -428,7 +184,7 @@ test "Intersect a world with a ray" {
 
 const Computations = struct {
     t: f64,
-    object: Sphere,
+    object: Shape,
     point: Vec4,
     over_point: Vec4,
     eyev: Vec4,
@@ -441,7 +197,7 @@ pub fn prepareComputations(intersection: Intersection, ray: Ray) Computations {
     const eyev = ray.direction.negate();
 
     var inside = false;
-    var normalv = sphereNormalAt(intersection.object, point);
+    var normalv = intersection.object.normalAt(point);
 
     if (normalv.dot(eyev) < 0) {
         inside = true;
@@ -464,7 +220,7 @@ pub fn prepareComputations(intersection: Intersection, ray: Ray) Computations {
 
 test "Precomputing the state of an intersection" {
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const shape = Sphere{};
+    const shape = Shape{ .sphere = .{} };
     const i = Intersection{
         .t = 4,
         .object = shape,
@@ -481,7 +237,7 @@ test "Precomputing the state of an intersection" {
 
 test "The hit, when an intersection occurs on the outside" {
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const shape = Sphere{};
+    const shape = Shape{ .sphere = .{} };
     const i = Intersection{
         .t = 4,
         .object = shape,
@@ -493,7 +249,7 @@ test "The hit, when an intersection occurs on the outside" {
 
 test "The hit, when an intersection occurs on the inside" {
     const r = Ray.init(initPoint(0, 0, 0), initVector(0, 0, 1));
-    const shape = Sphere{};
+    const shape = Shape{ .sphere = .{} };
     const i = Intersection{
         .t = 1,
         .object = shape,
@@ -508,8 +264,10 @@ test "The hit, when an intersection occurs on the inside" {
 
 test "The hit should offset the point" {
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const shape = Sphere{
-        .transform = Mat4.identity().translate(0, 0, 1),
+    const shape = Shape{
+        .sphere = .{
+            .transform = Mat4.identity().translate(0, 0, 1),
+        },
     };
     const i = Intersection{
         .t = 5,
@@ -525,7 +283,7 @@ pub fn shadeHit(world: World, comps: Computations) Color {
     const in_shadow = isShadowed(world.allocator, world, comps.over_point) catch false;
 
     return lighting(
-        comps.object.material,
+        comps.object.material(),
         world.light,
         comps.point,
         comps.eyev,
@@ -582,11 +340,13 @@ test "shade_hit() is given an intersection in shadow" {
         .intensity = Color.White,
     };
 
-    const s1 = Sphere{};
+    const s1 = Shape{ .sphere = .{} };
     try w.objects.append(s1);
 
-    const s2 = Sphere{
-        .transform = Mat4.identity().translate(0, 0, 10),
+    const s2 = Shape{
+        .sphere = .{
+            .transform = Mat4.identity().translate(0, 0, 10),
+        },
     };
     try w.objects.append(s2);
 
@@ -640,17 +400,17 @@ test "The color with an intersection behind the ray" {
     defer w.deinit();
 
     var outer = &w.objects.items[0];
-    outer.material.color = Color.init(0.3, 0.3, 1.0);
-    outer.material.ambient = 1.0;
+    outer.sphere.material.color = Color.init(0.3, 0.3, 1.0);
+    outer.sphere.material.ambient = 1.0;
 
     var inner = &w.objects.items[1];
-    inner.material.color = Color.init(0.5, 1.0, 0.2);
-    inner.material.ambient = 1.0;
+    inner.sphere.material.color = Color.init(0.5, 1.0, 0.2);
+    inner.sphere.material.ambient = 1.0;
 
     const r = Ray.init(initPoint(0, 0, 0.75), initVector(0, 0, -1));
 
     const c = try worldColorAt(alloc, w, r);
-    try utils.expectColorApproxEq(inner.material.color, c);
+    try utils.expectColorApproxEq(inner.sphere.material.color, c);
 }
 
 pub fn viewTransform(from: Vec4, to: Vec4, up: Vec4) Mat4 {

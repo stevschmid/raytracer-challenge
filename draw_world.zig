@@ -10,7 +10,7 @@ const Canvas = @import("canvas.zig").Canvas;
 const Color = @import("color.zig").Color;
 const canvasToPPM = @import("ppm.zig").canvasToPPM;
 
-const Sphere = @import("sphere.zig").Sphere;
+const Shape = @import("shape.zig").Shape;
 const Ray = @import("ray.zig").Ray;
 const Material = @import("material.zig").Material;
 const PointLight = @import("light.zig").PointLight;
@@ -29,65 +29,77 @@ pub fn main() !void {
     var world = World.init(allocator);
     defer world.deinit();
 
-    const floor = Sphere{
-        .transform = Mat4.identity().scale(10, 0.01, 10),
-        .material = Material{
-            .color = Color.init(1, 0.9, 0.9),
-            .specular = 0,
+    const floor = Shape{
+        .sphere = .{
+            .transform = Mat4.identity().scale(10, 0.01, 10),
+            .material = Material{
+                .color = Color.init(1, 0.9, 0.9),
+                .specular = 0,
+            },
         },
     };
     try world.objects.append(floor);
 
-    const left_wall = Sphere{
-        .transform = Mat4.identity()
-            .scale(10, 0.01, 10)
-            .rotateX(std.math.pi / 2.0)
-            .rotateY(-std.math.pi / 4.0)
-            .translate(0, 0, 5),
-        .material = floor.material,
+    const left_wall = Shape{
+        .sphere = .{
+            .transform = Mat4.identity()
+                .scale(10, 0.01, 10)
+                .rotateX(std.math.pi / 2.0)
+                .rotateY(-std.math.pi / 4.0)
+                .translate(0, 0, 5),
+            .material = floor.sphere.material,
+        },
     };
     try world.objects.append(left_wall);
 
-    const right_wall = Sphere{
-        .transform = Mat4.identity()
-            .scale(10, 0.01, 10)
-            .rotateX(std.math.pi / 2.0)
-            .rotateY(std.math.pi / 4.0)
-            .translate(0, 0, 5),
-        .material = floor.material,
+    const right_wall = Shape{
+        .sphere = .{
+            .transform = Mat4.identity()
+                .scale(10, 0.01, 10)
+                .rotateX(std.math.pi / 2.0)
+                .rotateY(std.math.pi / 4.0)
+                .translate(0, 0, 5),
+            .material = floor.sphere.material,
+        },
     };
     try world.objects.append(right_wall);
 
-    const middle = Sphere{
-        .transform = Mat4.identity().translate(-0.5, 1, 0.5),
-        .material = Material{
-            .color = Color.init(0.1, 1, 0.5),
-            .diffuse = 0.7,
-            .specular = 0.3,
+    const middle = Shape{
+        .sphere = .{
+            .transform = Mat4.identity().translate(-0.5, 1, 0.5),
+            .material = Material{
+                .color = Color.init(0.1, 1, 0.5),
+                .diffuse = 0.7,
+                .specular = 0.3,
+            },
         },
     };
     try world.objects.append(middle);
 
-    const right = Sphere{
-        .transform = Mat4.identity()
-            .scale(0.5, 0.5, 0.5)
-            .translate(1.5, 0.5, -0.5),
-        .material = Material{
-            .color = Color.init(0.5, 1, 0.1),
-            .diffuse = 0.7,
-            .specular = 0.3,
+    const right = Shape{
+        .sphere = .{
+            .transform = Mat4.identity()
+                .scale(0.5, 0.5, 0.5)
+                .translate(1.5, 0.5, -0.5),
+            .material = Material{
+                .color = Color.init(0.5, 1, 0.1),
+                .diffuse = 0.7,
+                .specular = 0.3,
+            },
         },
     };
     try world.objects.append(right);
 
-    const left = Sphere{
-        .transform = Mat4.identity()
-            .scale(0.33, 0.33, 0.33)
-            .translate(-1.5, 0.33, -0.75),
-        .material = Material{
-            .color = Color.init(1, 0.8, 0.1),
-            .diffuse = 0.7,
-            .specular = 0.3,
+    const left = Shape{
+        .sphere = .{
+            .transform = Mat4.identity()
+                .scale(0.33, 0.33, 0.33)
+                .translate(-1.5, 0.33, -0.75),
+            .material = Material{
+                .color = Color.init(1, 0.8, 0.1),
+                .diffuse = 0.7,
+                .specular = 0.3,
+            },
         },
     };
     try world.objects.append(left);
