@@ -19,21 +19,21 @@ pub const Camera = struct {
 
     hsize: usize,
     vsize: usize,
-    field_of_view: f32,
-    half_width: f32,
-    half_height: f32,
-    pixel_size: f32,
+    field_of_view: f64,
+    half_width: f64,
+    half_height: f64,
+    pixel_size: f64,
 
     transform: Mat4 = Mat4.identity(),
 
-    pub fn init(hsize: usize, vsize: usize, field_of_view: f32) Self {
+    pub fn init(hsize: usize, vsize: usize, field_of_view: f64) Self {
         const half_view = std.math.tan(field_of_view * 0.5);
-        const aspect = @intToFloat(f32, hsize) / @intToFloat(f32, vsize);
+        const aspect = @intToFloat(f64, hsize) / @intToFloat(f64, vsize);
 
         const half_width = if (aspect >= 1.0) half_view else half_view * aspect;
         const half_height = if (aspect < 1.0) half_view else half_view / aspect;
 
-        const pixel_size = (2.0 * half_width) / @intToFloat(f32, hsize);
+        const pixel_size = (2.0 * half_width) / @intToFloat(f64, hsize);
 
         return Self{
             .hsize = hsize,
@@ -47,8 +47,8 @@ pub const Camera = struct {
 
     pub fn rayForPixel(self: Self, x: usize, y: usize) Ray {
         // the offset from the edge of the canvas to the pixel's center
-        const x_offset = (@intToFloat(f32, x) + 0.5) * self.pixel_size;
-        const y_offset = (@intToFloat(f32, y) + 0.5) * self.pixel_size;
+        const x_offset = (@intToFloat(f64, x) + 0.5) * self.pixel_size;
+        const y_offset = (@intToFloat(f64, y) + 0.5) * self.pixel_size;
 
         // the untransformed coordinates of the pixel in world space
         // (remember that the camera looks toward -z, so +x is to the *left*)
@@ -76,7 +76,7 @@ pub const Camera = struct {
 
         var y: usize = 0;
         while (y < self.vsize) : (y += 1) {
-            // const world_y = half - @intToFloat(f32, y) * pixel_size;
+            // const world_y = half - @intToFloat(f64, y) * pixel_size;
             var x: usize = 0;
             while (x < self.hsize) : (x += 1) {
                 const ray = self.rayForPixel(x, y);
@@ -93,17 +93,17 @@ test "Constructing a camera" {
     const c = Camera.init(160, 120, 0.5 * std.math.pi);
     try std.testing.expectEqual(@as(usize, 160), c.hsize);
     try std.testing.expectEqual(@as(usize, 120), c.vsize);
-    try std.testing.expectEqual(@as(f32, 0.5 * std.math.pi), c.field_of_view);
+    try std.testing.expectEqual(@as(f64, 0.5 * std.math.pi), c.field_of_view);
 }
 
 test "The pixel size for a horizontal canvas" {
     const c = Camera.init(200, 125, 0.5 * std.math.pi);
-    try std.testing.expectEqual(@as(f32, 0.01), c.pixel_size);
+    try std.testing.expectEqual(@as(f64, 0.01), c.pixel_size);
 }
 
 test "The pixel size for a vertical canvas" {
     const c = Camera.init(125, 200, 0.5 * std.math.pi);
-    try std.testing.expectEqual(@as(f32, 0.01), c.pixel_size);
+    try std.testing.expectEqual(@as(f64, 0.01), c.pixel_size);
 }
 
 test "Constructing a ray through the center of the canvas" {

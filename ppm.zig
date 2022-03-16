@@ -3,7 +3,7 @@ const std = @import("std");
 const Color = @import("color.zig").Color;
 const Canvas = @import("canvas.zig").Canvas;
 
-inline fn byteColorValue(val: f32) u8 {
+inline fn byteColorValue(val: f64) u8 {
     const v = std.math.clamp(val * 256.0, 0.0, 255.0);
     return @floatToInt(u8, v);
 }

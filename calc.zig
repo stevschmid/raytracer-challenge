@@ -15,7 +15,7 @@ const Material = @import("material.zig").Material;
 const PointLight = @import("light.zig").PointLight;
 
 pub const Intersection = struct {
-    t: f32,
+    t: f64,
     object: Sphere,
 };
 
@@ -90,8 +90,8 @@ test "a ray intersects sphere at two points" {
 
     try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
 
-    try utils.expectEpsilonEq(@as(f32, 4.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f32, 6.0), xs.list.items[1].t);
+    try utils.expectEpsilonEq(@as(f64, 4.0), xs.list.items[0].t);
+    try utils.expectEpsilonEq(@as(f64, 6.0), xs.list.items[1].t);
 
     try std.testing.expectEqual(s, xs.list.items[0].object);
     try std.testing.expectEqual(s, xs.list.items[1].object);
@@ -106,8 +106,8 @@ test "a ray intersects a sphere at a tangent" {
 
     try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
 
-    try utils.expectEpsilonEq(@as(f32, 5.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f32, 5.0), xs.list.items[1].t);
+    try utils.expectEpsilonEq(@as(f64, 5.0), xs.list.items[0].t);
+    try utils.expectEpsilonEq(@as(f64, 5.0), xs.list.items[1].t);
 
     try std.testing.expectEqual(s, xs.list.items[0].object);
     try std.testing.expectEqual(s, xs.list.items[1].object);
@@ -132,8 +132,8 @@ test "a ray originates inside a sphere" {
 
     try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
 
-    try utils.expectEpsilonEq(@as(f32, -1.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f32, 1.0), xs.list.items[1].t);
+    try utils.expectEpsilonEq(@as(f64, -1.0), xs.list.items[0].t);
+    try utils.expectEpsilonEq(@as(f64, 1.0), xs.list.items[1].t);
 
     try std.testing.expectEqual(s, xs.list.items[0].object);
     try std.testing.expectEqual(s, xs.list.items[1].object);
@@ -148,8 +148,8 @@ test "a sphere is behind a ray" {
 
     try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
 
-    try utils.expectEpsilonEq(@as(f32, -6.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f32, -4.0), xs.list.items[1].t);
+    try utils.expectEpsilonEq(@as(f64, -6.0), xs.list.items[0].t);
+    try utils.expectEpsilonEq(@as(f64, -4.0), xs.list.items[1].t);
 
     try std.testing.expectEqual(s, xs.list.items[0].object);
     try std.testing.expectEqual(s, xs.list.items[1].object);
@@ -250,8 +250,8 @@ test "Intersecting a scaled sphere with a ray" {
 
     try std.testing.expectEqual(@as(usize, 2), xs.list.items.len);
 
-    try utils.expectEpsilonEq(@as(f32, 3.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f32, 7.0), xs.list.items[1].t);
+    try utils.expectEpsilonEq(@as(f64, 3.0), xs.list.items[0].t);
+    try utils.expectEpsilonEq(@as(f64, 7.0), xs.list.items[1].t);
 }
 
 test "Intersecting a translated sphere with a ray" {
@@ -352,7 +352,7 @@ pub fn lighting(material: Material, light: PointLight, position: Vec4, eyev: Vec
         const reflect_dot_eye = reflectv.dot(eyev);
 
         if (reflect_dot_eye > 0.0) {
-            const factor = std.math.pow(f32, reflect_dot_eye, material.shininess);
+            const factor = std.math.pow(f64, reflect_dot_eye, material.shininess);
             specular = light.intensity.scale(material.specular * factor);
         }
     }
@@ -478,14 +478,14 @@ test "Intersect a world with a ray" {
 
     try std.testing.expectEqual(@as(usize, 4), xs.list.items.len);
 
-    try utils.expectEpsilonEq(@as(f32, 4.0), xs.list.items[0].t);
-    try utils.expectEpsilonEq(@as(f32, 4.5), xs.list.items[1].t);
-    try utils.expectEpsilonEq(@as(f32, 5.5), xs.list.items[2].t);
-    try utils.expectEpsilonEq(@as(f32, 6.0), xs.list.items[3].t);
+    try utils.expectEpsilonEq(@as(f64, 4.0), xs.list.items[0].t);
+    try utils.expectEpsilonEq(@as(f64, 4.5), xs.list.items[1].t);
+    try utils.expectEpsilonEq(@as(f64, 5.5), xs.list.items[2].t);
+    try utils.expectEpsilonEq(@as(f64, 6.0), xs.list.items[3].t);
 }
 
 const Computations = struct {
-    t: f32,
+    t: f64,
     object: Sphere,
     point: Vec4,
     over_point: Vec4,
@@ -506,7 +506,7 @@ pub fn prepareComputations(intersection: Intersection, ray: Ray) Computations {
         normalv = normalv.negate();
     }
 
-    const epsilon = std.math.epsilon(f32);
+    const epsilon = 0.0001;
     const over_point = point.add(normalv.scale(epsilon));
 
     return Computations{
@@ -530,7 +530,7 @@ test "Precomputing the state of an intersection" {
 
     const comps = prepareComputations(i, r);
 
-    try std.testing.expectEqual(@as(f32, 4.0), comps.t);
+    try std.testing.expectEqual(@as(f64, 4.0), comps.t);
     try std.testing.expectEqual(shape, comps.object);
     try std.testing.expectEqual(initPoint(0, 0, -1), comps.point);
     try std.testing.expectEqual(initVector(0, 0, -1), comps.eyev);
@@ -575,7 +575,7 @@ test "The hit should offset the point" {
     };
 
     const comps = prepareComputations(i, r);
-    try std.testing.expectEqual(-std.math.epsilon(f32), comps.over_point.z);
+    try std.testing.expectEqual(@as(f64, -0.0001), comps.over_point.z);
     try std.testing.expect(comps.point.z > comps.over_point.z);
 }
 

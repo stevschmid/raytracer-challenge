@@ -7,8 +7,8 @@ const Color = @import("color.zig").Color;
 const canvasToPPM = @import("ppm.zig").canvasToPPM;
 
 fn addPointToCanvas(canvas: *Canvas, point: Vec4) void {
-    const w = @intToFloat(f32, canvas.width);
-    const h = @intToFloat(f32, canvas.height);
+    const w = @intToFloat(f64, canvas.width);
+    const h = @intToFloat(f64, canvas.height);
 
     // 0, 0 is middle, 0.5, 0.5 is edge
     const x = 0.5 + point.x;

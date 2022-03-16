@@ -46,9 +46,9 @@ pub fn main() !void {
         p = tick(p, e);
 
         const x = @floatToInt(usize, std.math.max(p.pos.x, 0.0));
-        const y = @floatToInt(usize, std.math.max(@intToFloat(f32, canvas.height) - p.pos.y, 0.0));
+        const y = @floatToInt(usize, std.math.max(@intToFloat(f64, canvas.height) - p.pos.y, 0.0));
 
-        // // const y = @floatToInt(usize, @intToFloat(f32, canvas.height * std.math.clamp(p.pos.y / 5.0, 0.0, 5.0));
+        // // const y = @floatToInt(usize, @intToFloat(f64, canvas.height * std.math.clamp(p.pos.y / 5.0, 0.0, 5.0));
 
         if (x < canvas.width and y < canvas.height) {
             canvas.set(x, y, Color.init(1, 0, 0));

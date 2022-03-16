@@ -4,14 +4,14 @@ const epsilonEq = @import("utils.zig").epsilonEq;
 pub const Color = struct {
     const Self = @This();
 
-    red: f32,
-    green: f32,
-    blue: f32,
+    red: f64,
+    green: f64,
+    blue: f64,
 
     pub const Black = Self.init(0, 0, 0);
     pub const White = Self.init(1, 1, 1);
 
-    pub fn init(red: f32, green: f32, blue: f32) Self {
+    pub fn init(red: f64, green: f64, blue: f64) Self {
         return .{
             .red = red,
             .green = green,
@@ -41,7 +41,7 @@ pub const Color = struct {
         };
     }
 
-    pub fn scale(self: Self, scalar: f32) Self {
+    pub fn scale(self: Self, scalar: f64) Self {
         return .{
             .red = scalar * self.red,
             .green = scalar * self.green,

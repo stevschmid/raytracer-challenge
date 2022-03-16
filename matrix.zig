@@ -8,7 +8,7 @@ pub const Mat2 = struct {
     const Self = @This();
 
     pub const Size = 2;
-    mat: [Size][Size]f32 = undefined,
+    mat: [Size][Size]f64 = undefined,
 
     pub fn eql(self: Self, other: Self) bool {
         const a = self.mat;
@@ -20,12 +20,12 @@ pub const Mat2 = struct {
             epsilonEq(a[1][1], b[1][1]);
     }
 
-    pub fn determinant(self: Self) f32 {
+    pub fn determinant(self: Self) f64 {
         const m = self.mat;
         return m[0][0] * m[1][1] - m[0][1] * m[1][0];
     }
 
-    pub fn at(self: Self, row: usize, col: usize) f32 {
+    pub fn at(self: Self, row: usize, col: usize) f64 {
         return self.mat[row][col];
     }
 };
@@ -34,9 +34,9 @@ pub const Mat3 = struct {
     const Self = @This();
 
     pub const Size = 3;
-    mat: [Size][Size]f32 = undefined,
+    mat: [Size][Size]f64 = undefined,
 
-    pub fn at(self: Self, row: usize, col: usize) f32 {
+    pub fn at(self: Self, row: usize, col: usize) f64 {
         return self.mat[row][col];
     }
 
@@ -74,19 +74,19 @@ pub const Mat3 = struct {
         return res;
     }
 
-    pub fn minor(self: Self, row: usize, col: usize) f32 {
+    pub fn minor(self: Self, row: usize, col: usize) f64 {
         const sub = self.submatrix(row, col);
         return sub.determinant();
     }
 
-    pub fn cofactor(self: Self, row: usize, col: usize) f32 {
+    pub fn cofactor(self: Self, row: usize, col: usize) f64 {
         const det = self.minor(row, col);
         const is_odd = ((row + col) % 2 != 0);
         return if (is_odd) -det else det;
     }
 
-    pub fn determinant(self: Self) f32 {
-        var det: f32 = 0;
+    pub fn determinant(self: Self) f64 {
+        var det: f64 = 0;
 
         for (self.mat[0]) |val, col| {
             det += val * self.cofactor(0, col);
@@ -100,7 +100,7 @@ pub const Mat4 = struct {
     const Self = @This();
 
     pub const Size = 4;
-    mat: [Size][Size]f32 = undefined,
+    mat: [Size][Size]f64 = undefined,
 
     pub fn identity() Self {
         return .{
@@ -113,7 +113,7 @@ pub const Mat4 = struct {
         };
     }
 
-    pub fn translate(self: Self, x: f32, y: f32, z: f32) Self {
+    pub fn translate(self: Self, x: f64, y: f64, z: f64) Self {
         return (Self{
             .mat = .{
                 .{ 1, 0, 0, x },
@@ -124,7 +124,7 @@ pub const Mat4 = struct {
         }).mult(self);
     }
 
-    pub fn scale(self: Self, x: f32, y: f32, z: f32) Self {
+    pub fn scale(self: Self, x: f64, y: f64, z: f64) Self {
         return (Self{
             .mat = .{
                 .{ x, 0, 0, 0 },
@@ -135,7 +135,7 @@ pub const Mat4 = struct {
         }).mult(self);
     }
 
-    pub fn rotateX(self: Self, rad: f32) Self {
+    pub fn rotateX(self: Self, rad: f64) Self {
         return (Self{
             .mat = .{
                 .{ 1, 0, 0, 0 },
@@ -146,7 +146,7 @@ pub const Mat4 = struct {
         }).mult(self);
     }
 
-    pub fn rotateY(self: Self, rad: f32) Self {
+    pub fn rotateY(self: Self, rad: f64) Self {
         return (Self{
             .mat = .{
                 .{ std.math.cos(rad), 0, std.math.sin(rad), 0 },
@@ -157,7 +157,7 @@ pub const Mat4 = struct {
         }).mult(self);
     }
 
-    pub fn rotateZ(self: Self, rad: f32) Self {
+    pub fn rotateZ(self: Self, rad: f64) Self {
         return (Self{
             .mat = .{
                 .{ std.math.cos(rad), -std.math.sin(rad), 0, 0 },
@@ -168,7 +168,7 @@ pub const Mat4 = struct {
         }).mult(self);
     }
 
-    pub fn shear(self: Self, xy: f32, xz: f32, yx: f32, yz: f32, zx: f32, zy: f32) Self {
+    pub fn shear(self: Self, xy: f64, xz: f64, yx: f64, yz: f64, zx: f64, zy: f64) Self {
         return (Self{
             .mat = .{
                 .{ 1, xy, xz, 0 },
@@ -179,7 +179,7 @@ pub const Mat4 = struct {
         }).mult(self);
     }
 
-    pub fn at(self: Self, row: usize, col: usize) f32 {
+    pub fn at(self: Self, row: usize, col: usize) f64 {
         return self.mat[row][col];
     }
 
@@ -258,19 +258,19 @@ pub const Mat4 = struct {
         return res;
     }
 
-    pub fn minor(self: Self, row: usize, col: usize) f32 {
+    pub fn minor(self: Self, row: usize, col: usize) f64 {
         const sub = self.submatrix(row, col);
         return sub.determinant();
     }
 
-    pub fn cofactor(self: Self, row: usize, col: usize) f32 {
+    pub fn cofactor(self: Self, row: usize, col: usize) f64 {
         const det = self.minor(row, col);
         const is_odd = ((row + col) % 2 != 0);
         return if (is_odd) -det else det;
     }
 
-    pub fn determinant(self: Self) f32 {
-        var det: f32 = 0;
+    pub fn determinant(self: Self) f64 {
+        var det: f64 = 0;
 
         for (self.mat[0]) |val, col| {
             det += val * self.cofactor(0, col);

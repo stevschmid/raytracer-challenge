@@ -24,7 +24,7 @@ pub const Ray = struct {
         };
     }
 
-    pub fn position(self: Self, t: f32) Vec4 {
+    pub fn position(self: Self, t: f64) Vec4 {
         return self.origin.add(self.direction.scale(t));
     }
 

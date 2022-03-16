@@ -1,11 +1,11 @@
 const std = @import("std");
 const epsilonEq = @import("utils.zig").epsilonEq;
 
-pub fn initPoint(x: f32, y: f32, z: f32) Vec4 {
+pub fn initPoint(x: f64, y: f64, z: f64) Vec4 {
     return Vec4.init(x, y, z, 1.0);
 }
 
-pub fn initVector(x: f32, y: f32, z: f32) Vec4 {
+pub fn initVector(x: f64, y: f64, z: f64) Vec4 {
     return Vec4.init(x, y, z, 0.0);
 }
 
@@ -20,12 +20,12 @@ pub fn isVector(vec: Vec4) bool {
 pub const Vec4 = struct {
     const Self = @This();
 
-    x: f32,
-    y: f32,
-    z: f32,
-    w: f32,
+    x: f64,
+    y: f64,
+    z: f64,
+    w: f64,
 
-    pub fn init(x: f32, y: f32, z: f32, w: f32) Self {
+    pub fn init(x: f64, y: f64, z: f64, w: f64) Self {
         return .{
             .x = x,
             .y = y,
@@ -68,7 +68,7 @@ pub const Vec4 = struct {
         };
     }
 
-    pub fn scale(self: Self, scalar: f32) Self {
+    pub fn scale(self: Self, scalar: f64) Self {
         return .{
             .x = scalar * self.x,
             .y = scalar * self.y,
@@ -77,11 +77,11 @@ pub const Vec4 = struct {
         };
     }
 
-    pub fn div(self: Self, scalar: f32) Self {
+    pub fn div(self: Self, scalar: f64) Self {
         return self.scale(1.0 / scalar);
     }
 
-    pub fn length(self: Self) f32 {
+    pub fn length(self: Self) f64 {
         return std.math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w);
     }
 
@@ -96,7 +96,7 @@ pub const Vec4 = struct {
         };
     }
 
-    pub fn dot(self: Self, other: Self) f32 {
+    pub fn dot(self: Self, other: Self) f64 {
         return self.x * other.x +
             self.y * other.y +
             self.z * other.z +
