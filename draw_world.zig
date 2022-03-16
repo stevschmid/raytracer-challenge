@@ -30,8 +30,7 @@ pub fn main() !void {
     defer world.deinit();
 
     const floor = Shape{
-        .sphere = .{
-            .transform = Mat4.identity().scale(10, 0.01, 10),
+        .plane = .{
             .material = Material{
                 .color = Color.init(1, 0.9, 0.9),
                 .specular = 0,
@@ -39,30 +38,6 @@ pub fn main() !void {
         },
     };
     try world.objects.append(floor);
-
-    const left_wall = Shape{
-        .sphere = .{
-            .transform = Mat4.identity()
-                .scale(10, 0.01, 10)
-                .rotateX(std.math.pi / 2.0)
-                .rotateY(-std.math.pi / 4.0)
-                .translate(0, 0, 5),
-            .material = floor.sphere.material,
-        },
-    };
-    try world.objects.append(left_wall);
-
-    const right_wall = Shape{
-        .sphere = .{
-            .transform = Mat4.identity()
-                .scale(10, 0.01, 10)
-                .rotateX(std.math.pi / 2.0)
-                .rotateY(std.math.pi / 4.0)
-                .translate(0, 0, 5),
-            .material = floor.sphere.material,
-        },
-    };
-    try world.objects.append(right_wall);
 
     const middle = Shape{
         .sphere = .{

@@ -50,23 +50,57 @@ const Sphere = struct {
     }
 };
 
+const Plane = struct {
+    const Self = @This();
+
+    transform: Mat4 = Mat4.identity(),
+    material: Material = .{},
+
+    pub fn localNormalAt(self: Self, point: Vec4) Vec4 {
+        _ = self;
+        _ = point;
+        return initVector(0, 1, 0);
+    }
+
+    pub fn localIntersect(self: Self, allocator: std.mem.Allocator, ray: Ray) !Intersections {
+        _ = ray;
+        _ = self;
+
+        var res = Intersections.init(allocator);
+        errdefer res.deinit();
+
+        // check if coplanar
+        if (std.math.absFloat(ray.direction.y) < std.math.epsilon(f64))
+            return res;
+
+        const t = -ray.origin.y / ray.direction.y;
+
+        try res.list.append(.{ .t = t, .object = .{ .plane = self } });
+
+        return res;
+    }
+};
+
 pub const Shape = union(enum) {
     const Self = @This();
 
     sphere: Sphere,
+    plane: Plane,
 
     pub fn material(self: Self) Material {
         return switch (self) {
             .sphere => |s| s.material,
+            .plane => |p| p.material,
         };
     }
 
     pub fn normalAt(self: Self, world_point: Vec4) Vec4 {
         const object_space = self.inverseTransform();
-
         const local_point = object_space.multVec(world_point);
+
         const local_normal = switch (self) {
             .sphere => |s| s.localNormalAt(local_point),
+            .plane => |p| p.localNormalAt(local_point),
         };
 
         var world_normal = object_space.transpose().multVec(local_normal);
@@ -81,12 +115,14 @@ pub const Shape = union(enum) {
 
         return switch (self) {
             .sphere => |s| try s.localIntersect(allocator, local_ray),
+            .plane => |p| try p.localIntersect(allocator, local_ray),
         };
     }
 
     fn inverseTransform(self: Self) Mat4 {
         const transform = switch (self) {
             .sphere => |s| s.transform,
+            .plane => |p| p.transform,
         };
 
         return transform.inverse();
@@ -265,4 +301,68 @@ test "Intersecting a translated shape with a ray" {
     defer xs.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), xs.list.items.len);
+}
+
+test "The normal of a plane is constant everywhere" {
+    const p = Plane{};
+
+    const n1 = p.localNormalAt(initPoint(0, 0, 0));
+    const n2 = p.localNormalAt(initPoint(10, 0, -10));
+    const n3 = p.localNormalAt(initPoint(-5, 0, 150));
+
+    try utils.expectVec4ApproxEq(initVector(0, 1, 0), n1);
+    try utils.expectVec4ApproxEq(initVector(0, 1, 0), n2);
+    try utils.expectVec4ApproxEq(initVector(0, 1, 0), n3);
+}
+
+test "Intersect with a ray parallel to the plane" {
+    const p = Plane{};
+    const r = Ray.init(initPoint(0, 10, 0), initVector(0, 0, 1));
+
+    var xs = try p.localIntersect(alloc, r);
+    defer xs.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), xs.list.items.len);
+}
+
+test "Intersect with a coplanar ray" {
+    const p = Plane{};
+    const r = Ray.init(initPoint(0, 0, 0), initVector(0, 0, 1));
+
+    var xs = try p.localIntersect(alloc, r);
+    defer xs.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), xs.list.items.len);
+}
+
+test "Intersect with a ray parallel to the plane" {
+    const p = Plane{};
+    const r = Ray.init(initPoint(0, 10, 0), initVector(0, 0, 1));
+
+    var xs = try p.localIntersect(alloc, r);
+    defer xs.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), xs.list.items.len);
+}
+
+test "Intersect with a plane from above" {
+    const p = Plane{};
+    const r = Ray.init(initPoint(0, 1, 0), initVector(0, -1, 0));
+
+    var xs = try p.localIntersect(alloc, r);
+    defer xs.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), xs.list.items.len);
+    try utils.expectEpsilonEq(@as(f64, 1.0), xs.list.items[0].t);
+}
+
+test "Intersect with a plane from below" {
+    const p = Plane{};
+    const r = Ray.init(initPoint(0, -1, 0), initVector(0, 1, 0));
+
+    var xs = try p.localIntersect(alloc, r);
+    defer xs.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), xs.list.items.len);
+    try utils.expectEpsilonEq(@as(f64, 1.0), xs.list.items[0].t);
 }
