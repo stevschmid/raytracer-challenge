@@ -6,7 +6,6 @@ const vector = @import("vector.zig");
 const Vec4 = vector.Vec4;
 
 const Mat4 = @import("matrix.zig").Mat4;
-const Sphere = @import("sphere.zig").Sphere;
 
 const initPoint = vector.initPoint;
 const initVector = vector.initVector;

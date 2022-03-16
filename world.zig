@@ -6,7 +6,7 @@ const initPoint = @import("vector.zig").initPoint;
 const initVector = @import("vector.zig").initVector;
 
 const Color = @import("color.zig").Color;
-const Sphere = @import("sphere.zig").Sphere;
+const Shape = @import("shape.zig").Shape;
 
 const Ray = @import("ray.zig").Ray;
 const Material = @import("material.zig").Material;
@@ -16,13 +16,13 @@ pub const World = struct {
     const Self = @This();
 
     allocator: std.mem.Allocator,
-    objects: std.ArrayList(Sphere),
+    objects: std.ArrayList(Shape),
     light: PointLight,
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .allocator = allocator,
-            .objects = std.ArrayList(Sphere).init(allocator),
+            .objects = std.ArrayList(Shape).init(allocator),
             .light = .{},
         };
     }
@@ -34,17 +34,21 @@ pub const World = struct {
             .intensity = Color.White,
         };
 
-        const s1 = Sphere{
-            .material = .{
-                .color = Color.init(0.8, 1.0, 0.6),
-                .diffuse = 0.7,
-                .specular = 0.2,
+        const s1 = Shape{
+            .sphere = .{
+                .material = .{
+                    .color = Color.init(0.8, 1.0, 0.6),
+                    .diffuse = 0.7,
+                    .specular = 0.2,
+                },
             },
         };
         try world.objects.append(s1);
 
-        const s2 = Sphere{
-            .transform = Mat4.identity().scale(0.5, 0.5, 0.5),
+        const s2 = Shape{
+            .sphere = .{
+                .transform = Mat4.identity().scale(0.5, 0.5, 0.5),
+            },
         };
         try world.objects.append(s2);
 
@@ -62,8 +66,8 @@ test "The default world" {
     var w = try World.initDefault(alloc);
     defer w.deinit();
 
-    try std.testing.expectEqual(w.objects.items[0].material.color, Color.init(0.8, 1.0, 0.6));
-    try std.testing.expectEqual(w.objects.items[1].transform, Mat4.identity().scale(0.5, 0.5, 0.5));
+    try std.testing.expectEqual(w.objects.items[0].sphere.material.color, Color.init(0.8, 1.0, 0.6));
+    try std.testing.expectEqual(w.objects.items[1].sphere.transform, Mat4.identity().scale(0.5, 0.5, 0.5));
     try std.testing.expectEqual(w.light.position, initPoint(-10, 10, -10));
     try std.testing.expectEqual(w.light.intensity, Color.White);
 }
