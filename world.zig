@@ -28,12 +28,11 @@ pub const World = struct {
     }
 
     pub fn initDefault(allocator: std.mem.Allocator) !Self {
-        const light = PointLight{
+        var world = init(allocator);
+        world.light = PointLight{
             .position = initPoint(-10, 10, -10),
             .intensity = Color.White,
         };
-
-        var world = init(allocator, light);
 
         const s1 = Sphere{
             .material = .{

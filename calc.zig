@@ -322,7 +322,7 @@ test "Computing the normal on a translated sphere" {
     try utils.expectVec4ApproxEq(n, initVector(0, 0.97014, -0.24254));
 }
 
-pub fn lighting(material: Material, light: PointLight, position: Vec4, eyev: Vec4, normalv: Vec4) Color {
+pub fn lighting(material: Material, light: PointLight, position: Vec4, eyev: Vec4, normalv: Vec4, in_shadow: bool) Color {
     // combine surface color with light color/intensity
     const effective_color = material.color.mult(light.intensity);
 
@@ -341,7 +341,7 @@ pub fn lighting(material: Material, light: PointLight, position: Vec4, eyev: Vec
     var diffuse = Color.Black;
     var specular = Color.Black;
 
-    if (light_dot_normal > 0.0) {
+    if (light_dot_normal > 0.0 and !in_shadow) {
         // compute diffuse contribution
         diffuse = effective_color.scale(material.diffuse * light_dot_normal);
 
@@ -371,7 +371,7 @@ test "Lighting with the eye between the light and the surface" {
         .intensity = Color.init(1, 1, 1),
     };
 
-    const res = lighting(mat, light, position, eyev, normalv);
+    const res = lighting(mat, light, position, eyev, normalv, false);
     try utils.expectColorApproxEq(Color.init(1.9, 1.9, 1.9), res);
 }
 
@@ -386,7 +386,7 @@ test "Lighting with the eye between light and surface, eye offset 45°" {
         .intensity = Color.init(1, 1, 1),
     };
 
-    const res = lighting(mat, light, position, eyev, normalv);
+    const res = lighting(mat, light, position, eyev, normalv, false);
     try utils.expectColorApproxEq(Color.init(1.0, 1.0, 1.0), res);
 }
 
@@ -401,7 +401,7 @@ test "Lighting with the eye opposite surface, light offset 45°" {
         .intensity = Color.init(1, 1, 1),
     };
 
-    const res = lighting(mat, light, position, eyev, normalv);
+    const res = lighting(mat, light, position, eyev, normalv, false);
     try utils.expectColorApproxEq(Color.init(0.7364, 0.7364, 0.7364), res);
 }
 
@@ -416,7 +416,7 @@ test "Lighting with the eye in the path of the reflection vector" {
         .intensity = Color.init(1, 1, 1),
     };
 
-    const res = lighting(mat, light, position, eyev, normalv);
+    const res = lighting(mat, light, position, eyev, normalv, false);
     try utils.expectColorApproxEq(Color.init(1.6364, 1.6364, 1.6364), res);
 }
 
@@ -431,8 +431,24 @@ test "Lighting with the light behind the surface" {
         .intensity = Color.init(1, 1, 1),
     };
 
-    const res = lighting(mat, light, position, eyev, normalv);
+    const res = lighting(mat, light, position, eyev, normalv, false);
     try utils.expectColorApproxEq(Color.init(0.1, 0.1, 0.1), res); // only ambient
+}
+
+test "Lighting with the surface in shadow" {
+    const position = initPoint(0, 0, 0);
+    const mat = Material{};
+
+    const eyev = initVector(0, 0, -1);
+    const normalv = initVector(0, 0, -1);
+    const light = PointLight{
+        .position = initPoint(0, 0, -10),
+        .intensity = Color.init(1, 1, 1),
+    };
+    const in_shadow = true;
+
+    const res = lighting(mat, light, position, eyev, normalv, in_shadow);
+    try utils.expectColorApproxEq(Color.init(0.1, 0.1, 0.1), res);
 }
 
 pub fn intersectWorld(allocator: std.mem.Allocator, world: World, world_ray: Ray) !Intersections {
@@ -472,6 +488,7 @@ const Computations = struct {
     t: f32,
     object: Sphere,
     point: Vec4,
+    over_point: Vec4,
     eyev: Vec4,
     normalv: Vec4,
     inside: bool,
@@ -489,10 +506,14 @@ pub fn prepareComputations(intersection: Intersection, ray: Ray) Computations {
         normalv = normalv.negate();
     }
 
+    const epsilon = std.math.epsilon(f32);
+    const over_point = point.add(normalv.scale(epsilon));
+
     return Computations{
         .t = intersection.t,
         .object = intersection.object,
         .point = point,
+        .over_point = over_point,
         .eyev = eyev,
         .normalv = normalv,
         .inside = inside,
@@ -543,13 +564,31 @@ test "The hit, when an intersection occurs on the inside" {
     try std.testing.expectEqual(initVector(0, 0, -1), comps.normalv);
 }
 
+test "The hit should offset the point" {
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
+    const shape = Sphere{
+        .transform = Mat4.identity().translate(0, 0, 1),
+    };
+    const i = Intersection{
+        .t = 5,
+        .object = shape,
+    };
+
+    const comps = prepareComputations(i, r);
+    try std.testing.expectEqual(-std.math.epsilon(f32), comps.over_point.z);
+    try std.testing.expect(comps.point.z > comps.over_point.z);
+}
+
 pub fn shadeHit(world: World, comps: Computations) Color {
+    const in_shadow = isShadowed(world.allocator, world, comps.over_point) catch false;
+
     return lighting(
         comps.object.material,
         world.light,
         comps.point,
         comps.eyev,
         comps.normalv,
+        in_shadow,
     );
 }
 
@@ -590,6 +629,35 @@ test "Shading an intersection from the inside" {
     const c = shadeHit(w, comps);
 
     try utils.expectColorApproxEq(Color.init(0.90498, 0.90498, 0.90498), c);
+}
+
+test "shade_hit() is given an intersection in shadow" {
+    var w = World.init(alloc);
+    defer w.deinit();
+
+    w.light = PointLight{
+        .position = initPoint(0, 0, -10),
+        .intensity = Color.White,
+    };
+
+    const s1 = Sphere{};
+    try w.objects.append(s1);
+
+    const s2 = Sphere{
+        .transform = Mat4.identity().translate(0, 0, 10),
+    };
+    try w.objects.append(s2);
+
+    const r = Ray.init(initPoint(0, 0, 5), initVector(0, 0, 1));
+    const i = Intersection{
+        .t = 4,
+        .object = s2,
+    };
+
+    const comps = prepareComputations(i, r);
+    const c = shadeHit(w, comps);
+
+    try utils.expectColorApproxEq(Color.init(0.1, 0.1, 0.1), c);
 }
 
 pub fn worldColorAt(allocator: std.mem.Allocator, world: World, ray: Ray) !Color {
@@ -697,4 +765,55 @@ test "An arbitrary view transformation" {
             .{ 0.00000, 0.00000, 0.00000, 1.00000 },
         },
     });
+}
+
+fn isShadowed(allocator: std.mem.Allocator, world: World, point: Vec4) !bool {
+    const v = world.light.position.sub(point);
+
+    const distance = v.length();
+    const direction = v.normalize();
+
+    const ray = Ray.init(point, direction);
+
+    var xs = try intersectWorld(allocator, world, ray);
+    defer xs.deinit();
+
+    const hit = xs.hit();
+    return (hit != null and hit.?.t < distance);
+}
+
+test "There is no shadow when nothing is collinear with point and light" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    const p = initPoint(0, 10, 0);
+    const result = try isShadowed(alloc, w, p);
+    try std.testing.expect(result == false);
+}
+
+test "The shadow when an object is between the point and the light" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    const p = initPoint(10, -10, 10);
+    const result = try isShadowed(alloc, w, p);
+    try std.testing.expect(result == true);
+}
+
+test "There is no shadow when an object is behind the light" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    const p = initPoint(-20, 20, -20);
+    const result = try isShadowed(alloc, w, p);
+    try std.testing.expect(result == false);
+}
+
+test "There is no shadow when an object is behind the point" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    const p = initPoint(-2, 2, -2);
+    const result = try isShadowed(alloc, w, p);
+    try std.testing.expect(result == false);
 }
