@@ -11,6 +11,7 @@ pub const Material = struct {
     diffuse: f64 = 0.9,
     specular: f64 = 0.9,
     shininess: f64 = 200.0,
+    reflective: f64 = 0.0,
     pattern: ?Pattern = null,
 };
 
@@ -22,6 +23,7 @@ test "The default material" {
     try std.testing.expectEqual(@as(f64, 0.9), m.diffuse);
     try std.testing.expectEqual(@as(f64, 0.9), m.specular);
     try std.testing.expectEqual(@as(f64, 200.0), m.shininess);
+    try std.testing.expectEqual(@as(f64, 0.0), m.reflective);
 }
 
 test "Can have a pattern" {

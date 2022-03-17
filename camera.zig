@@ -80,7 +80,7 @@ pub const Camera = struct {
             var x: usize = 0;
             while (x < self.hsize) : (x += 1) {
                 const ray = self.rayForPixel(x, y);
-                const color = try calc.worldColorAt(allocator, world, ray);
+                const color = try calc.worldColorAt(world, ray, 5);
                 canvas.set(x, y, color);
             }
         }
@@ -98,12 +98,12 @@ test "Constructing a camera" {
 
 test "The pixel size for a horizontal canvas" {
     const c = Camera.init(200, 125, 0.5 * std.math.pi);
-    try std.testing.expectEqual(@as(f64, 0.01), c.pixel_size);
+    try utils.expectEpsilonEq(@as(f64, 0.01), c.pixel_size);
 }
 
 test "The pixel size for a vertical canvas" {
     const c = Camera.init(125, 200, 0.5 * std.math.pi);
-    try std.testing.expectEqual(@as(f64, 0.01), c.pixel_size);
+    try utils.expectEpsilonEq(@as(f64, 0.01), c.pixel_size);
 }
 
 test "Constructing a ray through the center of the canvas" {

@@ -21,6 +21,8 @@ const PointLight = @import("light.zig").PointLight;
 
 const alloc = std.testing.allocator;
 
+const MaxIterations = 5;
+
 pub fn lighting(
     object: Shape,
     light: PointLight,
@@ -195,12 +197,12 @@ test "Lighting with a pattern applied" {
     try utils.expectColorApproxEq(b, c2);
 }
 
-pub fn intersectWorld(allocator: std.mem.Allocator, world: World, world_ray: Ray) !Intersections {
-    var total_intersections = Intersections.init(allocator);
+pub fn intersectWorld(world: World, world_ray: Ray) !Intersections {
+    var total_intersections = Intersections.init(world.allocator);
     errdefer total_intersections.deinit();
 
     for (world.objects.items) |object| {
-        var object_intersections = try object.intersect(allocator, world_ray);
+        var object_intersections = try object.intersect(world.allocator, world_ray);
         defer object_intersections.deinit();
 
         try total_intersections.list.appendSlice(object_intersections.list.items);
@@ -217,7 +219,7 @@ test "Intersect a world with a ray" {
 
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
 
-    var xs = try intersectWorld(alloc, w, r);
+    var xs = try intersectWorld(w, r);
     defer xs.deinit();
 
     try std.testing.expectEqual(@as(usize, 4), xs.list.items.len);
@@ -235,6 +237,7 @@ const Computations = struct {
     over_point: Vec4,
     eyev: Vec4,
     normalv: Vec4,
+    reflectv: Vec4,
     inside: bool,
 };
 
@@ -250,6 +253,8 @@ pub fn prepareComputations(intersection: Intersection, ray: Ray) Computations {
         normalv = normalv.negate();
     }
 
+    const reflectv = ray.direction.reflect(normalv);
+
     const epsilon = 0.0001;
     const over_point = point.add(normalv.scale(epsilon));
 
@@ -260,6 +265,7 @@ pub fn prepareComputations(intersection: Intersection, ray: Ray) Computations {
         .over_point = over_point,
         .eyev = eyev,
         .normalv = normalv,
+        .reflectv = reflectv,
         .inside = inside,
     };
 }
@@ -324,10 +330,21 @@ test "The hit should offset the point" {
     try std.testing.expect(comps.point.z > comps.over_point.z);
 }
 
-pub fn shadeHit(world: World, comps: Computations) Color {
-    const in_shadow = isShadowed(world.allocator, world, comps.over_point) catch false;
+test "Precomputing the reflection vector" {
+    const shape = Shape{ .geo = .{ .plane = .{} } };
+    const r = Ray.init(initPoint(0, 0, -1), initVector(-0, -std.math.sqrt(2.0) / 2.0, std.math.sqrt(2.0) / 2.0));
+    const i = Intersection{
+        .t = std.math.sqrt(2.0),
+        .object = shape,
+    };
+    const comps = prepareComputations(i, r);
+    try utils.expectVec4ApproxEq(initVector(0, std.math.sqrt(2.0) / 2.0, std.math.sqrt(2.0) / 2.0), comps.reflectv);
+}
 
-    return lighting(
+pub fn shadeHit(world: World, comps: Computations, remaining: i32) Color {
+    const in_shadow = isShadowed(world, comps.over_point) catch false;
+
+    const surface = lighting(
         comps.object,
         world.light,
         comps.over_point,
@@ -335,6 +352,10 @@ pub fn shadeHit(world: World, comps: Computations) Color {
         comps.normalv,
         in_shadow,
     );
+
+    const reflected = reflectedColor(world, comps, remaining);
+
+    return surface.add(reflected);
 }
 
 test "Shading an intersection" {
@@ -349,7 +370,7 @@ test "Shading an intersection" {
     };
 
     const comps = prepareComputations(i, r);
-    const c = shadeHit(w, comps);
+    const c = shadeHit(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.init(0.38066, 0.47583, 0.2855), c);
 }
@@ -371,7 +392,7 @@ test "Shading an intersection from the inside" {
     };
 
     const comps = prepareComputations(i, r);
-    const c = shadeHit(w, comps);
+    const c = shadeHit(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.init(0.90498, 0.90498, 0.90498), c);
 }
@@ -401,19 +422,42 @@ test "shade_hit() is given an intersection in shadow" {
     };
 
     const comps = prepareComputations(i, r);
-    const c = shadeHit(w, comps);
+    const c = shadeHit(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.init(0.1, 0.1, 0.1), c);
 }
 
-pub fn worldColorAt(allocator: std.mem.Allocator, world: World, ray: Ray) !Color {
-    var xs = try intersectWorld(allocator, world, ray);
+test "shade_hit() with a reflective material" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    var shape = Shape{
+        .geo = .{ .plane = .{} },
+        .transform = Mat4.identity().translate(0, -1, 0),
+        .material = .{ .reflective = 0.5 },
+    };
+    try w.objects.append(shape);
+
+    const r = Ray.init(initPoint(0, 0, -3), initVector(0, -std.math.sqrt(2.0) / 2.0, std.math.sqrt(2.0) / 2.0));
+    const i = Intersection{
+        .t = std.math.sqrt(2.0),
+        .object = shape,
+    };
+
+    const comps = prepareComputations(i, r);
+    const color = shadeHit(w, comps, MaxIterations);
+
+    try utils.expectColorApproxEq(Color.init(0.87677, 0.92436, 0.82918), color);
+}
+
+pub fn worldColorAt(world: World, ray: Ray, remaining: i32) !Color {
+    var xs = try intersectWorld(world, ray);
     defer xs.deinit();
 
     const hit = xs.hit();
     if (hit != null) {
         const comps = prepareComputations(hit.?, ray);
-        return shadeHit(world, comps);
+        return shadeHit(world, comps, remaining);
     } else {
         return Color.Black;
     }
@@ -425,7 +469,7 @@ test "The color when a ray misses" {
 
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 1, 0));
 
-    const c = try worldColorAt(alloc, w, r);
+    const c = try worldColorAt(w, r, MaxIterations);
     try utils.expectColorApproxEq(Color.init(0, 0, 0), c);
 }
 
@@ -435,7 +479,7 @@ test "The color when a ray hits" {
 
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
 
-    const c = try worldColorAt(alloc, w, r);
+    const c = try worldColorAt(w, r, MaxIterations);
     try utils.expectColorApproxEq(Color.init(0.38066, 0.47583, 0.2855), c);
 }
 
@@ -453,8 +497,37 @@ test "The color with an intersection behind the ray" {
 
     const r = Ray.init(initPoint(0, 0, 0.75), initVector(0, 0, -1));
 
-    const c = try worldColorAt(alloc, w, r);
+    const c = try worldColorAt(w, r, MaxIterations);
     try utils.expectColorApproxEq(inner.material.color, c);
+}
+
+test "worldColorAt() with mutually reflective surfaces" {
+    var w = World.init(alloc);
+    defer w.deinit();
+
+    w.light = PointLight{
+        .position = initPoint(0, 0, 0),
+        .intensity = Color.init(1, 1, 1),
+    };
+
+    var lower = Shape{
+        .geo = .{ .plane = .{} },
+        .transform = Mat4.identity().translate(0, -1, 0),
+        .material = .{ .reflective = 1 },
+    };
+    try w.objects.append(lower);
+
+    var upper = Shape{
+        .geo = .{ .plane = .{} },
+        .transform = Mat4.identity().translate(0, 1, 0),
+        .material = .{ .reflective = 1 },
+    };
+    try w.objects.append(upper);
+
+    const r = Ray.init(initPoint(0, 0, 0), initVector(0, 1, 1));
+
+    // should terminate
+    _ = try worldColorAt(w, r, MaxIterations);
 }
 
 pub fn viewTransform(from: Vec4, to: Vec4, up: Vec4) Mat4 {
@@ -513,7 +586,7 @@ test "An arbitrary view transformation" {
     });
 }
 
-fn isShadowed(allocator: std.mem.Allocator, world: World, point: Vec4) !bool {
+fn isShadowed(world: World, point: Vec4) !bool {
     const v = world.light.position.sub(point);
 
     const distance = v.length();
@@ -521,7 +594,7 @@ fn isShadowed(allocator: std.mem.Allocator, world: World, point: Vec4) !bool {
 
     const ray = Ray.init(point, direction);
 
-    var xs = try intersectWorld(allocator, world, ray);
+    var xs = try intersectWorld(world, ray);
     defer xs.deinit();
 
     const hit = xs.hit();
@@ -533,7 +606,7 @@ test "There is no shadow when nothing is collinear with point and light" {
     defer w.deinit();
 
     const p = initPoint(0, 10, 0);
-    const result = try isShadowed(alloc, w, p);
+    const result = try isShadowed(w, p);
     try std.testing.expect(result == false);
 }
 
@@ -542,7 +615,7 @@ test "The shadow when an object is between the point and the light" {
     defer w.deinit();
 
     const p = initPoint(10, -10, 10);
-    const result = try isShadowed(alloc, w, p);
+    const result = try isShadowed(w, p);
     try std.testing.expect(result == true);
 }
 
@@ -551,7 +624,7 @@ test "There is no shadow when an object is behind the light" {
     defer w.deinit();
 
     const p = initPoint(-20, 20, -20);
-    const result = try isShadowed(alloc, w, p);
+    const result = try isShadowed(w, p);
     try std.testing.expect(result == false);
 }
 
@@ -560,6 +633,65 @@ test "There is no shadow when an object is behind the point" {
     defer w.deinit();
 
     const p = initPoint(-2, 2, -2);
-    const result = try isShadowed(alloc, w, p);
+    const result = try isShadowed(w, p);
     try std.testing.expect(result == false);
+}
+
+pub fn reflectedColor(world: World, comps: Computations, remaining: i32) Color {
+    if (remaining <= 0) {
+        return Color.Black;
+    }
+
+    const reflective = comps.object.material.reflective;
+    if (std.math.approxEqAbs(f64, reflective, 0.0, std.math.epsilon(f64))) {
+        return Color.Black;
+    }
+
+    const reflect_ray = Ray.init(comps.over_point, comps.reflectv);
+    const color = worldColorAt(world, reflect_ray, remaining - 1) catch Color.Black;
+
+    return color.scale(reflective);
+}
+
+test "The reflected color for a nonreflective material" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    const r = Ray.init(initPoint(0, 0, 0), initVector(0, 0, 1));
+
+    var shape = &w.objects.items[1];
+    shape.material.ambient = 1.0;
+
+    const i = Intersection{
+        .t = 1,
+        .object = shape.*,
+    };
+
+    const comps = prepareComputations(i, r);
+    const color = reflectedColor(w, comps, MaxIterations);
+
+    try utils.expectColorApproxEq(Color.Black, color);
+}
+
+test "The reflected color for a nonreflective material" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    var shape = Shape{
+        .geo = .{ .plane = .{} },
+        .transform = Mat4.identity().translate(0, -1, 0),
+        .material = .{ .reflective = 0.5 },
+    };
+    try w.objects.append(shape);
+
+    const r = Ray.init(initPoint(0, 0, -3), initVector(0, -std.math.sqrt(2.0) / 2.0, std.math.sqrt(2.0) / 2.0));
+    const i = Intersection{
+        .t = std.math.sqrt(2.0),
+        .object = shape,
+    };
+
+    const comps = prepareComputations(i, r);
+    const color = reflectedColor(w, comps, MaxIterations);
+
+    try utils.expectColorApproxEq(Color.init(0.19032, 0.2379, 0.14274), color);
 }

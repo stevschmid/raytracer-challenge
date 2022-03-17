@@ -30,9 +30,9 @@ pub fn main() !void {
     var world = World.init(allocator);
     defer world.deinit();
 
-    const gradient_pattern = Pattern{
-        .pattern = .{ .gradient = .{ .a = Color.init(1, 1, 0.9), .b = Color.init(0.5, 0.7, 1) } },
-    };
+    // const gradient_pattern = Pattern{
+    //     .pattern = .{ .gradient = .{ .a = Color.init(1, 1, 0.9), .b = Color.init(0.5, 0.7, 1) } },
+    // };
     // const ring_pattern = Pattern{
     //     .pattern = .{ .ring = .{ .a = Color.init(0, 1, 0), .b = Color.init(1, 0, 1) } },
     // };
@@ -51,6 +51,7 @@ pub fn main() !void {
             .pattern = checkers_pattern,
             .color = Color.init(1, 0.9, 0.9),
             .specular = 0,
+            .reflective = 0.8,
         },
         .geo = .{ .plane = .{} },
     };
@@ -59,7 +60,6 @@ pub fn main() !void {
     const middle = Shape{
         .transform = Mat4.identity().translate(-0.5, 1, 0.5),
         .material = Material{
-            .pattern = gradient_pattern,
             .color = Color.init(0.1, 1, 0.5),
             .diffuse = 0.7,
             .specular = 0.3,
@@ -77,6 +77,7 @@ pub fn main() !void {
             .diffuse = 0.7,
             .pattern = stripe_pattern,
             .specular = 0.3,
+            .reflective = 0.3,
         },
         .geo = .{ .sphere = .{} },
     };
