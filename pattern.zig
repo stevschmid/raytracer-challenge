@@ -19,7 +19,45 @@ const Stripe = struct {
     b: Color,
 
     pub fn patternAt(self: Self, point: Vec4) Color {
-        return if (@mod(@floor(point.x), 2.0) == 0.0) self.a else self.b;
+        const c = @floor(point.x);
+        return if (@mod(c, 2) == 0) self.a else self.b;
+    }
+};
+
+const Gradient = struct {
+    const Self = @This();
+
+    a: Color,
+    b: Color,
+
+    pub fn patternAt(self: Self, point: Vec4) Color {
+        const distance = self.b.sub(self.a);
+        const fraction = point.x - @floor(point.x);
+        return self.a.add(distance.scale(fraction));
+    }
+};
+
+const Ring = struct {
+    const Self = @This();
+
+    a: Color,
+    b: Color,
+
+    pub fn patternAt(self: Self, point: Vec4) Color {
+        const c = @floor(std.math.sqrt(point.x * point.x + point.z * point.z));
+        return if (@mod(c, 2) == 0) self.a else self.b;
+    }
+};
+
+const Checkers = struct {
+    const Self = @This();
+
+    a: Color,
+    b: Color,
+
+    pub fn patternAt(self: Self, point: Vec4) Color {
+        const c = @floor(point.x) + @floor(point.y) + @floor(point.z);
+        return if (@mod(c, 2) == 0) self.a else self.b;
     }
 };
 
@@ -29,6 +67,9 @@ pub const Pattern = struct {
     pattern: union(enum) {
         point: void,
         stripe: Stripe,
+        gradient: Gradient,
+        ring: Ring,
+        checkers: Checkers,
     } = .{ .point = {} },
 
     transform: Mat4 = Mat4.identity(),
@@ -43,6 +84,9 @@ pub const Pattern = struct {
         return switch (self.pattern) {
             .point => Color.init(pattern_point.x, pattern_point.y, pattern_point.z),
             .stripe => |p| p.patternAt(pattern_point),
+            .gradient => |p| p.patternAt(pattern_point),
+            .ring => |p| p.patternAt(pattern_point),
+            .checkers => |p| p.patternAt(pattern_point),
         };
     }
 };
@@ -102,4 +146,45 @@ test "Stripes with both an object and a pattern transformation" {
     };
 
     try utils.expectColorApproxEq(Color.White, p.patternAt(s, initPoint(2.5, 0, 0)));
+}
+
+test "A gradient lienarly interpolates between colors" {
+    const p = Pattern{ .pattern = .{ .gradient = .{ .a = Color.White, .b = Color.Black } } };
+    const s = Shape{};
+
+    try utils.expectColorApproxEq(Color.White, p.patternAt(s, initPoint(0, 0, 0)));
+    try utils.expectColorApproxEq(Color.init(0.75, 0.75, 0.75), p.patternAt(s, initPoint(0.25, 0, 0)));
+    try utils.expectColorApproxEq(Color.init(0.5, 0.5, 0.5), p.patternAt(s, initPoint(0.5, 0, 0)));
+    try utils.expectColorApproxEq(Color.init(0.25, 0.25, 0.25), p.patternAt(s, initPoint(0.75, 0, 0)));
+}
+
+test "A ring should extend in both x and z" {
+    const p = Pattern{ .pattern = .{ .ring = .{ .a = Color.White, .b = Color.Black } } };
+    const s = Shape{};
+
+    try utils.expectColorApproxEq(Color.White, p.patternAt(s, initPoint(0, 0, 0)));
+    try utils.expectColorApproxEq(Color.Black, p.patternAt(s, initPoint(1, 0, 0)));
+    try utils.expectColorApproxEq(Color.Black, p.patternAt(s, initPoint(0, 0, 1)));
+    // just slightly more than sqrt(2)/2
+    try utils.expectColorApproxEq(Color.Black, p.patternAt(s, initPoint(0.708, 0, 0.708)));
+}
+
+test "A checkers pattern should extend in x, y and z" {
+    const p = Pattern{ .pattern = .{ .checkers = .{ .a = Color.White, .b = Color.Black } } };
+    const s = Shape{};
+
+    // x
+    try utils.expectColorApproxEq(Color.White, p.patternAt(s, initPoint(0, 0, 0)));
+    try utils.expectColorApproxEq(Color.White, p.patternAt(s, initPoint(0.99, 0, 0)));
+    try utils.expectColorApproxEq(Color.Black, p.patternAt(s, initPoint(1.01, 0, 0)));
+
+    // y
+    try utils.expectColorApproxEq(Color.White, p.patternAt(s, initPoint(0, 0, 0)));
+    try utils.expectColorApproxEq(Color.White, p.patternAt(s, initPoint(0, 0.99, 0)));
+    try utils.expectColorApproxEq(Color.Black, p.patternAt(s, initPoint(0, 1.01, 0)));
+
+    // z
+    try utils.expectColorApproxEq(Color.White, p.patternAt(s, initPoint(0, 0, 0)));
+    try utils.expectColorApproxEq(Color.White, p.patternAt(s, initPoint(0, 0, 0.99)));
+    try utils.expectColorApproxEq(Color.Black, p.patternAt(s, initPoint(0, 0, 1.01)));
 }

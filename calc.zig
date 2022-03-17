@@ -330,7 +330,7 @@ pub fn shadeHit(world: World, comps: Computations) Color {
     return lighting(
         comps.object,
         world.light,
-        comps.point,
+        comps.over_point,
         comps.eyev,
         comps.normalv,
         in_shadow,

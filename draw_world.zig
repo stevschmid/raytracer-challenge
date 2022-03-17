@@ -30,8 +30,25 @@ pub fn main() !void {
     var world = World.init(allocator);
     defer world.deinit();
 
+    const gradient_pattern = Pattern{
+        .pattern = .{ .gradient = .{ .a = Color.init(1, 1, 0.9), .b = Color.init(0.5, 0.7, 1) } },
+    };
+    // const ring_pattern = Pattern{
+    //     .pattern = .{ .ring = .{ .a = Color.init(0, 1, 0), .b = Color.init(1, 0, 1) } },
+    // };
+    const checkers_pattern = Pattern{
+        .pattern = .{ .checkers = .{ .a = Color.init(0, 1, 0), .b = Color.init(0, 0.8, 0) } },
+    };
+    const stripe_pattern = Pattern{
+        .pattern = .{ .stripe = .{ .a = Color.init(0.5, 1, 0.1), .b = Color.init(1, 0.5, 0.1) } },
+        .transform = Mat4.identity().scale(0.2, 0.2, 0.2)
+            .rotateY(std.math.pi * 0.25)
+            .rotateZ(std.math.pi * 0.25),
+    };
+
     const floor = Shape{
         .material = Material{
+            .pattern = checkers_pattern,
             .color = Color.init(1, 0.9, 0.9),
             .specular = 0,
         },
@@ -42,6 +59,7 @@ pub fn main() !void {
     const middle = Shape{
         .transform = Mat4.identity().translate(-0.5, 1, 0.5),
         .material = Material{
+            .pattern = gradient_pattern,
             .color = Color.init(0.1, 1, 0.5),
             .diffuse = 0.7,
             .specular = 0.3,
@@ -50,15 +68,6 @@ pub fn main() !void {
     };
     try world.objects.append(middle);
 
-    const c1 = Color.init(0.5, 1, 0.1);
-    const c2 = Color.init(1, 0.5, 0.1);
-    const pattern = Pattern{
-        .pattern = .{ .stripe = .{ .a = c1, .b = c2 } },
-        .transform = Mat4.identity().scale(0.2, 0.2, 0.2)
-            .rotateY(std.math.pi * 0.25)
-            .rotateZ(std.math.pi * 0.25),
-    };
-
     const right = Shape{
         .transform = Mat4.identity()
             .scale(0.5, 0.5, 0.5)
@@ -66,7 +75,7 @@ pub fn main() !void {
         .material = Material{
             .color = Color.init(0.5, 1, 0.1),
             .diffuse = 0.7,
-            .pattern = pattern,
+            .pattern = stripe_pattern,
             .specular = 0.3,
         },
         .geo = .{ .sphere = .{} },
