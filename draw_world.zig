@@ -8,6 +8,7 @@ const initVector = vector.initVector;
 const Mat4 = @import("matrix.zig").Mat4;
 const Canvas = @import("canvas.zig").Canvas;
 const Color = @import("color.zig").Color;
+const Pattern = @import("pattern.zig").Pattern;
 const canvasToPPM = @import("ppm.zig").canvasToPPM;
 
 const Shape = @import("shape.zig").Shape;
@@ -49,6 +50,15 @@ pub fn main() !void {
     };
     try world.objects.append(middle);
 
+    const c1 = Color.init(0.5, 1, 0.1);
+    const c2 = Color.init(1, 0.5, 0.1);
+    const pattern = Pattern{
+        .pattern = .{ .stripe = .{ .a = c1, .b = c2 } },
+        .transform = Mat4.identity().scale(0.2, 0.2, 0.2)
+            .rotateY(std.math.pi * 0.25)
+            .rotateZ(std.math.pi * 0.25),
+    };
+
     const right = Shape{
         .transform = Mat4.identity()
             .scale(0.5, 0.5, 0.5)
@@ -56,6 +66,7 @@ pub fn main() !void {
         .material = Material{
             .color = Color.init(0.5, 1, 0.1),
             .diffuse = 0.7,
+            .pattern = pattern,
             .specular = 0.3,
         },
         .geo = .{ .sphere = .{} },

@@ -4,6 +4,7 @@ const utils = @import("utils.zig");
 const Vec4 = @import("vector.zig").Vec4;
 const Mat4 = @import("matrix.zig").Mat4;
 const Color = @import("color.zig").Color;
+const Pattern = @import("pattern.zig").Pattern;
 
 const initVector = @import("vector.zig").initVector;
 const initPoint = @import("vector.zig").initPoint;
@@ -20,9 +21,20 @@ const PointLight = @import("light.zig").PointLight;
 
 const alloc = std.testing.allocator;
 
-pub fn lighting(material: Material, light: PointLight, position: Vec4, eyev: Vec4, normalv: Vec4, in_shadow: bool) Color {
+pub fn lighting(
+    object: Shape,
+    light: PointLight,
+    position: Vec4,
+    eyev: Vec4,
+    normalv: Vec4,
+    in_shadow: bool,
+) Color {
+    const material = object.material;
+
+    const color = if (material.pattern) |pattern| pattern.patternAt(object, position) else material.color;
+
     // combine surface color with light color/intensity
-    const effective_color = material.color.mult(light.intensity);
+    const effective_color = color.mult(light.intensity);
 
     // find direction of the light source
     const lightv = light.position.sub(position).normalize();
@@ -61,6 +73,7 @@ pub fn lighting(material: Material, light: PointLight, position: Vec4, eyev: Vec
 test "Lighting with the eye between the light and the surface" {
     const position = initPoint(0, 0, 0);
     const mat = Material{};
+    const obj = Shape{ .material = mat };
 
     const eyev = initVector(0, 0, -1);
     const normalv = initVector(0, 0, -1);
@@ -69,13 +82,14 @@ test "Lighting with the eye between the light and the surface" {
         .intensity = Color.init(1, 1, 1),
     };
 
-    const res = lighting(mat, light, position, eyev, normalv, false);
+    const res = lighting(obj, light, position, eyev, normalv, false);
     try utils.expectColorApproxEq(Color.init(1.9, 1.9, 1.9), res);
 }
 
 test "Lighting with the eye between light and surface, eye offset 45°" {
     const position = initPoint(0, 0, 0);
     const mat = Material{};
+    const obj = Shape{ .material = mat };
 
     const eyev = initVector(0, 1, -1).normalize();
     const normalv = initVector(0, 0, -1);
@@ -84,13 +98,14 @@ test "Lighting with the eye between light and surface, eye offset 45°" {
         .intensity = Color.init(1, 1, 1),
     };
 
-    const res = lighting(mat, light, position, eyev, normalv, false);
+    const res = lighting(obj, light, position, eyev, normalv, false);
     try utils.expectColorApproxEq(Color.init(1.0, 1.0, 1.0), res);
 }
 
 test "Lighting with the eye opposite surface, light offset 45°" {
     const position = initPoint(0, 0, 0);
     const mat = Material{};
+    const obj = Shape{ .material = mat };
 
     const eyev = initVector(0, 0, -1);
     const normalv = initVector(0, 0, -1);
@@ -99,13 +114,14 @@ test "Lighting with the eye opposite surface, light offset 45°" {
         .intensity = Color.init(1, 1, 1),
     };
 
-    const res = lighting(mat, light, position, eyev, normalv, false);
+    const res = lighting(obj, light, position, eyev, normalv, false);
     try utils.expectColorApproxEq(Color.init(0.7364, 0.7364, 0.7364), res);
 }
 
 test "Lighting with the eye in the path of the reflection vector" {
     const position = initPoint(0, 0, 0);
     const mat = Material{};
+    const obj = Shape{ .material = mat };
 
     const eyev = initVector(0, -std.math.sqrt(2.0) / 2.0, -std.math.sqrt(2.0) / 2.0);
     const normalv = initVector(0, 0, -1);
@@ -114,13 +130,14 @@ test "Lighting with the eye in the path of the reflection vector" {
         .intensity = Color.init(1, 1, 1),
     };
 
-    const res = lighting(mat, light, position, eyev, normalv, false);
+    const res = lighting(obj, light, position, eyev, normalv, false);
     try utils.expectColorApproxEq(Color.init(1.6364, 1.6364, 1.6364), res);
 }
 
 test "Lighting with the light behind the surface" {
     const position = initPoint(0, 0, 0);
     const mat = Material{};
+    const obj = Shape{ .material = mat };
 
     const eyev = initVector(0, 0, -1);
     const normalv = initVector(0, 0, -1);
@@ -129,13 +146,14 @@ test "Lighting with the light behind the surface" {
         .intensity = Color.init(1, 1, 1),
     };
 
-    const res = lighting(mat, light, position, eyev, normalv, false);
+    const res = lighting(obj, light, position, eyev, normalv, false);
     try utils.expectColorApproxEq(Color.init(0.1, 0.1, 0.1), res); // only ambient
 }
 
 test "Lighting with the surface in shadow" {
     const position = initPoint(0, 0, 0);
     const mat = Material{};
+    const obj = Shape{ .material = mat };
 
     const eyev = initVector(0, 0, -1);
     const normalv = initVector(0, 0, -1);
@@ -145,8 +163,36 @@ test "Lighting with the surface in shadow" {
     };
     const in_shadow = true;
 
-    const res = lighting(mat, light, position, eyev, normalv, in_shadow);
+    const res = lighting(obj, light, position, eyev, normalv, in_shadow);
     try utils.expectColorApproxEq(Color.init(0.1, 0.1, 0.1), res);
+}
+
+test "Lighting with a pattern applied" {
+    const a = Color.init(0.5, 0.2, 0.9);
+    const b = Color.init(0.2, 0.8, 1.0);
+
+    const pattern = Pattern{ .pattern = .{ .stripe = .{ .a = a, .b = b } } };
+    const mat = Material{
+        .pattern = pattern,
+        .ambient = 1,
+        .diffuse = 0,
+        .specular = 0,
+    };
+    const obj = Shape{ .material = mat };
+
+    const eyev = initVector(0, 0, -1);
+    const normalv = initVector(0, 0, -1);
+    const light = PointLight{
+        .position = initPoint(0, 0, -10),
+        .intensity = Color.init(1, 1, 1),
+    };
+    const in_shadow = false;
+
+    const c1 = lighting(obj, light, initPoint(0.9, 0, 0), eyev, normalv, in_shadow);
+    const c2 = lighting(obj, light, initPoint(1.1, 0, 0), eyev, normalv, in_shadow);
+
+    try utils.expectColorApproxEq(a, c1);
+    try utils.expectColorApproxEq(b, c2);
 }
 
 pub fn intersectWorld(allocator: std.mem.Allocator, world: World, world_ray: Ray) !Intersections {
@@ -282,7 +328,7 @@ pub fn shadeHit(world: World, comps: Computations) Color {
     const in_shadow = isShadowed(world.allocator, world, comps.over_point) catch false;
 
     return lighting(
-        comps.object.material,
+        comps.object,
         world.light,
         comps.point,
         comps.eyev,

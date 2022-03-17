@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const Color = @import("color.zig").Color;
+const Pattern = @import("pattern.zig").Pattern;
 
 pub const Material = struct {
     const Self = @This();
@@ -10,6 +11,7 @@ pub const Material = struct {
     diffuse: f64 = 0.9,
     specular: f64 = 0.9,
     shininess: f64 = 200.0,
+    pattern: ?Pattern = null,
 };
 
 test "The default material" {
@@ -20,4 +22,11 @@ test "The default material" {
     try std.testing.expectEqual(@as(f64, 0.9), m.diffuse);
     try std.testing.expectEqual(@as(f64, 0.9), m.specular);
     try std.testing.expectEqual(@as(f64, 200.0), m.shininess);
+}
+
+test "Can have a pattern" {
+    const p = Pattern{ .pattern = .{ .stripe = .{ .a = Color.White, .b = Color.Black } } };
+    const m = Material{ .pattern = p };
+
+    try std.testing.expectEqual(p, m.pattern.?);
 }
