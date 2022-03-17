@@ -220,7 +220,7 @@ pub fn prepareComputations(intersection: Intersection, ray: Ray) Computations {
 
 test "Precomputing the state of an intersection" {
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const shape = Shape{ .sphere = .{} };
+    const shape = Shape{ .geo = .{ .sphere = .{} } };
     const i = Intersection{
         .t = 4,
         .object = shape,
@@ -237,7 +237,7 @@ test "Precomputing the state of an intersection" {
 
 test "The hit, when an intersection occurs on the outside" {
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const shape = Shape{ .sphere = .{} };
+    const shape = Shape{ .geo = .{ .sphere = .{} } };
     const i = Intersection{
         .t = 4,
         .object = shape,
@@ -249,7 +249,7 @@ test "The hit, when an intersection occurs on the outside" {
 
 test "The hit, when an intersection occurs on the inside" {
     const r = Ray.init(initPoint(0, 0, 0), initVector(0, 0, 1));
-    const shape = Shape{ .sphere = .{} };
+    const shape = Shape{ .geo = .{ .sphere = .{} } };
     const i = Intersection{
         .t = 1,
         .object = shape,
@@ -265,9 +265,8 @@ test "The hit, when an intersection occurs on the inside" {
 test "The hit should offset the point" {
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
     const shape = Shape{
-        .sphere = .{
-            .transform = Mat4.identity().translate(0, 0, 1),
-        },
+        .transform = Mat4.identity().translate(0, 0, 1),
+        .geo = .{ .sphere = .{} },
     };
     const i = Intersection{
         .t = 5,
@@ -283,7 +282,7 @@ pub fn shadeHit(world: World, comps: Computations) Color {
     const in_shadow = isShadowed(world.allocator, world, comps.over_point) catch false;
 
     return lighting(
-        comps.object.material(),
+        comps.object.material,
         world.light,
         comps.point,
         comps.eyev,
@@ -340,13 +339,12 @@ test "shade_hit() is given an intersection in shadow" {
         .intensity = Color.White,
     };
 
-    const s1 = Shape{ .sphere = .{} };
+    const s1 = Shape{ .geo = .{ .sphere = .{} } };
     try w.objects.append(s1);
 
     const s2 = Shape{
-        .sphere = .{
-            .transform = Mat4.identity().translate(0, 0, 10),
-        },
+        .transform = Mat4.identity().translate(0, 0, 10),
+        .geo = .{ .sphere = .{} },
     };
     try w.objects.append(s2);
 
@@ -400,17 +398,17 @@ test "The color with an intersection behind the ray" {
     defer w.deinit();
 
     var outer = &w.objects.items[0];
-    outer.sphere.material.color = Color.init(0.3, 0.3, 1.0);
-    outer.sphere.material.ambient = 1.0;
+    outer.material.color = Color.init(0.3, 0.3, 1.0);
+    outer.material.ambient = 1.0;
 
     var inner = &w.objects.items[1];
-    inner.sphere.material.color = Color.init(0.5, 1.0, 0.2);
-    inner.sphere.material.ambient = 1.0;
+    inner.material.color = Color.init(0.5, 1.0, 0.2);
+    inner.material.ambient = 1.0;
 
     const r = Ray.init(initPoint(0, 0, 0.75), initVector(0, 0, -1));
 
     const c = try worldColorAt(alloc, w, r);
-    try utils.expectColorApproxEq(inner.sphere.material.color, c);
+    try utils.expectColorApproxEq(inner.material.color, c);
 }
 
 pub fn viewTransform(from: Vec4, to: Vec4, up: Vec4) Mat4 {

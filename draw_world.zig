@@ -30,52 +30,48 @@ pub fn main() !void {
     defer world.deinit();
 
     const floor = Shape{
-        .plane = .{
-            .material = Material{
-                .color = Color.init(1, 0.9, 0.9),
-                .specular = 0,
-            },
+        .material = Material{
+            .color = Color.init(1, 0.9, 0.9),
+            .specular = 0,
         },
+        .geo = .{ .plane = .{} },
     };
     try world.objects.append(floor);
 
     const middle = Shape{
-        .sphere = .{
-            .transform = Mat4.identity().translate(-0.5, 1, 0.5),
-            .material = Material{
-                .color = Color.init(0.1, 1, 0.5),
-                .diffuse = 0.7,
-                .specular = 0.3,
-            },
+        .transform = Mat4.identity().translate(-0.5, 1, 0.5),
+        .material = Material{
+            .color = Color.init(0.1, 1, 0.5),
+            .diffuse = 0.7,
+            .specular = 0.3,
         },
+        .geo = .{ .sphere = .{} },
     };
     try world.objects.append(middle);
 
     const right = Shape{
-        .sphere = .{
-            .transform = Mat4.identity()
-                .scale(0.5, 0.5, 0.5)
-                .translate(1.5, 0.5, -0.5),
-            .material = Material{
-                .color = Color.init(0.5, 1, 0.1),
-                .diffuse = 0.7,
-                .specular = 0.3,
-            },
+        .transform = Mat4.identity()
+            .scale(0.5, 0.5, 0.5)
+            .translate(1.5, 0.5, -0.5),
+        .material = Material{
+            .color = Color.init(0.5, 1, 0.1),
+            .diffuse = 0.7,
+            .specular = 0.3,
         },
+        .geo = .{ .sphere = .{} },
     };
     try world.objects.append(right);
 
     const left = Shape{
-        .sphere = .{
-            .transform = Mat4.identity()
-                .scale(0.33, 0.33, 0.33)
-                .translate(-1.5, 0.33, -0.75),
-            .material = Material{
-                .color = Color.init(1, 0.8, 0.1),
-                .diffuse = 0.7,
-                .specular = 0.3,
-            },
+        .transform = Mat4.identity()
+            .scale(0.33, 0.33, 0.33)
+            .translate(-1.5, 0.33, -0.75),
+        .material = Material{
+            .color = Color.init(1, 0.8, 0.1),
+            .diffuse = 0.7,
+            .specular = 0.3,
         },
+        .geo = .{ .sphere = .{} },
     };
     try world.objects.append(left);
 

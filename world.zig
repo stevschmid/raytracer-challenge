@@ -35,20 +35,18 @@ pub const World = struct {
         };
 
         const s1 = Shape{
-            .sphere = .{
-                .material = .{
-                    .color = Color.init(0.8, 1.0, 0.6),
-                    .diffuse = 0.7,
-                    .specular = 0.2,
-                },
+            .geo = .{ .sphere = .{} },
+            .material = .{
+                .color = Color.init(0.8, 1.0, 0.6),
+                .diffuse = 0.7,
+                .specular = 0.2,
             },
         };
         try world.objects.append(s1);
 
         const s2 = Shape{
-            .sphere = .{
-                .transform = Mat4.identity().scale(0.5, 0.5, 0.5),
-            },
+            .geo = .{ .sphere = .{} },
+            .transform = Mat4.identity().scale(0.5, 0.5, 0.5),
         };
         try world.objects.append(s2);
 
@@ -66,8 +64,8 @@ test "The default world" {
     var w = try World.initDefault(alloc);
     defer w.deinit();
 
-    try std.testing.expectEqual(w.objects.items[0].sphere.material.color, Color.init(0.8, 1.0, 0.6));
-    try std.testing.expectEqual(w.objects.items[1].sphere.transform, Mat4.identity().scale(0.5, 0.5, 0.5));
+    try std.testing.expectEqual(w.objects.items[0].material.color, Color.init(0.8, 1.0, 0.6));
+    try std.testing.expectEqual(w.objects.items[1].transform, Mat4.identity().scale(0.5, 0.5, 0.5));
     try std.testing.expectEqual(w.light.position, initPoint(-10, 10, -10));
     try std.testing.expectEqual(w.light.intensity, Color.White);
 }

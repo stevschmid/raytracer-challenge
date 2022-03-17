@@ -15,17 +15,12 @@ const initPoint = vector.initPoint;
 const initVector = vector.initVector;
 
 const Sphere = struct {
-    const Self = @This();
-
-    transform: Mat4 = Mat4.identity(),
-    material: Material = .{},
-
-    pub fn localNormalAt(self: Self, point: Vec4) Vec4 {
-        _ = self;
+    pub fn localNormalAt(shape: Shape, point: Vec4) Vec4 {
+        _ = shape;
         return point.sub(initPoint(0, 0, 0)).normalize();
     }
 
-    pub fn localIntersect(self: Self, allocator: std.mem.Allocator, ray: Ray) !Intersections {
+    pub fn localIntersect(shape: Shape, allocator: std.mem.Allocator, ray: Ray) !Intersections {
         var res = Intersections.init(allocator);
         errdefer res.deinit();
 
@@ -43,28 +38,22 @@ const Sphere = struct {
         const t1 = (-b - std.math.sqrt(discriminant)) / (2 * a);
         const t2 = (-b + std.math.sqrt(discriminant)) / (2 * a);
 
-        try res.list.append(.{ .t = t1, .object = .{ .sphere = self } });
-        try res.list.append(.{ .t = t2, .object = .{ .sphere = self } });
+        try res.list.append(.{ .t = t1, .object = shape });
+        try res.list.append(.{ .t = t2, .object = shape });
 
         return res;
     }
 };
 
 const Plane = struct {
-    const Self = @This();
-
-    transform: Mat4 = Mat4.identity(),
-    material: Material = .{},
-
-    pub fn localNormalAt(self: Self, point: Vec4) Vec4 {
-        _ = self;
+    pub fn localNormalAt(shape: Shape, point: Vec4) Vec4 {
+        _ = shape;
         _ = point;
         return initVector(0, 1, 0);
     }
 
-    pub fn localIntersect(self: Self, allocator: std.mem.Allocator, ray: Ray) !Intersections {
+    pub fn localIntersect(shape: Shape, allocator: std.mem.Allocator, ray: Ray) !Intersections {
         _ = ray;
-        _ = self;
 
         var res = Intersections.init(allocator);
         errdefer res.deinit();
@@ -75,32 +64,30 @@ const Plane = struct {
 
         const t = -ray.origin.y / ray.direction.y;
 
-        try res.list.append(.{ .t = t, .object = .{ .plane = self } });
+        try res.list.append(.{ .t = t, .object = shape });
 
         return res;
     }
 };
 
-pub const Shape = union(enum) {
+pub const Shape = struct {
     const Self = @This();
 
-    sphere: Sphere,
-    plane: Plane,
+    geo: union(enum) {
+        sphere: Sphere,
+        plane: Plane,
+    } = .sphere,
 
-    pub fn material(self: Self) Material {
-        return switch (self) {
-            .sphere => |s| s.material,
-            .plane => |p| p.material,
-        };
-    }
+    transform: Mat4 = Mat4.identity(),
+    material: Material = .{},
 
     pub fn normalAt(self: Self, world_point: Vec4) Vec4 {
-        const object_space = self.inverseTransform();
+        const object_space = self.transform.inverse();
         const local_point = object_space.multVec(world_point);
 
-        const local_normal = switch (self) {
-            .sphere => |s| s.localNormalAt(local_point),
-            .plane => |p| p.localNormalAt(local_point),
+        const local_normal = switch (self.geo) {
+            .sphere => Sphere.localNormalAt(self, local_point),
+            .plane => Plane.localNormalAt(self, local_point),
         };
 
         var world_normal = object_space.transpose().multVec(local_normal);
@@ -110,69 +97,60 @@ pub const Shape = union(enum) {
     }
 
     pub fn intersect(self: Self, allocator: std.mem.Allocator, world_ray: Ray) !Intersections {
-        var object_space = self.inverseTransform();
+        var object_space = self.transform.inverse();
         var local_ray = world_ray.transform(object_space);
 
-        return switch (self) {
-            .sphere => |s| try s.localIntersect(allocator, local_ray),
-            .plane => |p| try p.localIntersect(allocator, local_ray),
+        return switch (self.geo) {
+            .sphere => try Sphere.localIntersect(self, allocator, local_ray),
+            .plane => try Plane.localIntersect(self, allocator, local_ray),
         };
-    }
-
-    fn inverseTransform(self: Self) Mat4 {
-        const transform = switch (self) {
-            .sphere => |s| s.transform,
-            .plane => |p| p.transform,
-        };
-
-        return transform.inverse();
     }
 };
 
-test "A sphere's default transformation" {
-    const s = Sphere{};
+test "A shape's default transformation" {
+    const s = Shape{};
     try std.testing.expect(s.transform.eql(Mat4.identity()));
 }
 
-test "Changing a sphere's transformation" {
-    var s = Sphere{};
+test "Changing a shape's transformation" {
+    var s = Shape{};
     s.transform = Mat4.identity().translate(2, 3, 4);
     try std.testing.expect(s.transform.eql(Mat4.identity().translate(2, 3, 4)));
 }
 
-test "A sphere has a default material" {
-    const s = Sphere{};
+test "A shape has a default material" {
+    const s = Shape{};
     try std.testing.expectEqual(Material{}, s.material);
 }
 
-test "A sphere may be assigned a material" {
+test "A shape may be assigned a material" {
     const m = Material{
         .ambient = 1.0,
     };
-    const s = Sphere{ .material = m };
+    const s = Shape{ .material = m };
     try std.testing.expectEqual(m, s.material);
 }
 
 test "The normal on a sphere at a point on the x axis" {
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
     const n = s.normalAt(initPoint(1, 0, 0));
     try std.testing.expect(n.eql(initVector(1, 0, 0)));
 }
 
 test "The normal on a sphere at a point on the y axis" {
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
     const n = s.normalAt(initPoint(0, 1, 0));
     try std.testing.expect(n.eql(initVector(0, 1, 0)));
 }
 
 test "The normal on a sphere at a point on the z axis" {
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
     const n = s.normalAt(initPoint(0, 0, 1));
     try std.testing.expect(n.eql(initVector(0, 0, 1)));
 }
 
 test "The normal on a sphere at a point at a nonaxial point" {
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
     const k = std.math.sqrt(3.0) / 3.0;
     const n = s.normalAt(initPoint(k, k, k));
 
@@ -184,9 +162,8 @@ const alloc = std.testing.allocator;
 
 test "Computing the normal on a translated sphere" {
     const s = Shape{
-        .sphere = .{
-            .transform = Mat4.identity().translate(0, 1, 0),
-        },
+        .transform = Mat4.identity().translate(0, 1, 0),
+        .geo = .{ .sphere = .{} },
     };
 
     const n = s.normalAt(initPoint(0, 1.70711, -0.70711));
@@ -195,11 +172,10 @@ test "Computing the normal on a translated sphere" {
 
 test "Computing the normal on a transformed sphere" {
     const s = Shape{
-        .sphere = .{
-            .transform = Mat4.identity()
-                .rotateZ(std.math.pi / 5.0)
-                .scale(1, 0.5, 1),
-        },
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity()
+            .rotateZ(std.math.pi / 5.0)
+            .scale(1, 0.5, 1),
     };
 
     const n = s.normalAt(initPoint(0, std.math.sqrt(2.0) / 2.0, -std.math.sqrt(2.0) / 2.0));
@@ -208,7 +184,7 @@ test "Computing the normal on a transformed sphere" {
 
 test "a ray intersects shape at two points" {
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
 
     var xs = try s.intersect(alloc, r);
     defer xs.deinit();
@@ -224,7 +200,7 @@ test "a ray intersects shape at two points" {
 
 test "a ray intersects a shape at a tangent" {
     const r = Ray.init(initPoint(0, 1, -5), initVector(0, 0, 1));
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
 
     var xs = try s.intersect(alloc, r);
     defer xs.deinit();
@@ -240,7 +216,7 @@ test "a ray intersects a shape at a tangent" {
 
 test "a ray misses a shape" {
     const r = Ray.init(initPoint(0, 2, -5), initVector(0, 0, 1));
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
 
     var xs = try s.intersect(alloc, r);
     defer xs.deinit();
@@ -250,7 +226,7 @@ test "a ray misses a shape" {
 
 test "a ray originates inside a shape" {
     const r = Ray.init(initPoint(0, 0, 0), initVector(0, 0, 1));
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
 
     var xs = try s.intersect(alloc, r);
     defer xs.deinit();
@@ -266,7 +242,7 @@ test "a ray originates inside a shape" {
 
 test "a shape is behind a ray" {
     const r = Ray.init(initPoint(0, 0, 5), initVector(0, 0, 1));
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
 
     var xs = try s.intersect(alloc, r);
     defer xs.deinit();
@@ -282,7 +258,10 @@ test "a shape is behind a ray" {
 
 test "Intersecting a scaled shape with a ray" {
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const s = Shape{ .sphere = .{ .transform = Mat4.identity().scale(2, 2, 2) } };
+    const s = Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().scale(2, 2, 2),
+    };
 
     var xs = try s.intersect(alloc, r);
     defer xs.deinit();
@@ -295,7 +274,10 @@ test "Intersecting a scaled shape with a ray" {
 
 test "Intersecting a translated shape with a ray" {
     const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
-    const s = Shape{ .sphere = .{ .transform = Mat4.identity().translate(5, 0, 0) } };
+    const s = Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().translate(5, 0, 0),
+    };
 
     var xs = try s.intersect(alloc, r);
     defer xs.deinit();
@@ -304,11 +286,11 @@ test "Intersecting a translated shape with a ray" {
 }
 
 test "The normal of a plane is constant everywhere" {
-    const p = Plane{};
+    const p = Shape{ .geo = .{ .plane = .{} } };
 
-    const n1 = p.localNormalAt(initPoint(0, 0, 0));
-    const n2 = p.localNormalAt(initPoint(10, 0, -10));
-    const n3 = p.localNormalAt(initPoint(-5, 0, 150));
+    const n1 = Plane.localNormalAt(p, initPoint(0, 0, 0));
+    const n2 = Plane.localNormalAt(p, initPoint(10, 0, -10));
+    const n3 = Plane.localNormalAt(p, initPoint(-5, 0, 150));
 
     try utils.expectVec4ApproxEq(initVector(0, 1, 0), n1);
     try utils.expectVec4ApproxEq(initVector(0, 1, 0), n2);
@@ -316,40 +298,40 @@ test "The normal of a plane is constant everywhere" {
 }
 
 test "Intersect with a ray parallel to the plane" {
-    const p = Plane{};
+    const p = Shape{ .geo = .{ .plane = .{} } };
     const r = Ray.init(initPoint(0, 10, 0), initVector(0, 0, 1));
 
-    var xs = try p.localIntersect(alloc, r);
+    var xs = try Plane.localIntersect(p, alloc, r);
     defer xs.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), xs.list.items.len);
 }
 
 test "Intersect with a coplanar ray" {
-    const p = Plane{};
+    const p = Shape{ .geo = .{ .plane = .{} } };
     const r = Ray.init(initPoint(0, 0, 0), initVector(0, 0, 1));
 
-    var xs = try p.localIntersect(alloc, r);
+    var xs = try Plane.localIntersect(p, alloc, r);
     defer xs.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), xs.list.items.len);
 }
 
 test "Intersect with a ray parallel to the plane" {
-    const p = Plane{};
+    const p = Shape{ .geo = .{ .plane = .{} } };
     const r = Ray.init(initPoint(0, 10, 0), initVector(0, 0, 1));
 
-    var xs = try p.localIntersect(alloc, r);
+    var xs = try Plane.localIntersect(p, alloc, r);
     defer xs.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), xs.list.items.len);
 }
 
 test "Intersect with a plane from above" {
-    const p = Plane{};
+    const p = Shape{ .geo = .{ .plane = .{} } };
     const r = Ray.init(initPoint(0, 1, 0), initVector(0, -1, 0));
 
-    var xs = try p.localIntersect(alloc, r);
+    var xs = try Plane.localIntersect(p, alloc, r);
     defer xs.deinit();
 
     try std.testing.expectEqual(@as(usize, 1), xs.list.items.len);
@@ -357,10 +339,10 @@ test "Intersect with a plane from above" {
 }
 
 test "Intersect with a plane from below" {
-    const p = Plane{};
+    const p = Shape{ .geo = .{ .plane = .{} } };
     const r = Ray.init(initPoint(0, -1, 0), initVector(0, 1, 0));
 
-    var xs = try p.localIntersect(alloc, r);
+    var xs = try Plane.localIntersect(p, alloc, r);
     defer xs.deinit();
 
     try std.testing.expectEqual(@as(usize, 1), xs.list.items.len);

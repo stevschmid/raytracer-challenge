@@ -95,7 +95,7 @@ pub const Intersections = struct {
 const alloc = std.testing.allocator;
 
 test "The hit, when all intersections have positive t" {
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
 
     var xs = Intersections.init(alloc);
     defer xs.deinit();
@@ -110,7 +110,7 @@ test "The hit, when all intersections have positive t" {
 }
 
 test "The hit, when some intersections have negative t" {
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
 
     var xs = Intersections.init(alloc);
     defer xs.deinit();
@@ -125,7 +125,7 @@ test "The hit, when some intersections have negative t" {
 }
 
 test "The hit, when all intersections have negative t" {
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
 
     var xs = Intersections.init(alloc);
     defer xs.deinit();
@@ -140,7 +140,7 @@ test "The hit, when all intersections have negative t" {
 }
 
 test "The hit is always the lowest nonnegative intersection" {
-    const s = Shape{ .sphere = .{} };
+    const s = Shape{ .geo = .{ .sphere = .{} } };
 
     var xs = Intersections.init(alloc);
     defer xs.deinit();
