@@ -460,7 +460,13 @@ pub fn shadeHit(world: World, comps: Computations, remaining: i32) Color {
     const reflected = reflectedColor(world, comps, remaining);
     const refracted = refractedColor(world, comps, remaining);
 
-    return surface.add(reflected).add(refracted);
+    const material = comps.object.material;
+    if (material.reflective > 0.0 and material.transparency > 0.0) {
+        const reflectance = schlick(comps);
+        return surface.add(reflected.scale(reflectance)).add(refracted.scale(1.0 - reflectance));
+    } else {
+        return surface.add(reflected).add(refracted);
+    }
 }
 
 test "Shading an intersection" {
@@ -591,6 +597,45 @@ test "shade_hit() with a transparent material" {
     const color = shadeHit(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.init(0.93642, 0.68642, 0.68642), color);
+}
+
+test "shade_hit() with a reflective, transparent material" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    var floor = Shape{
+        .geo = .{ .plane = .{} },
+        .transform = Mat4.identity().translate(0, -1, 0),
+        .material = .{
+            .reflective = 0.5,
+            .transparency = 0.5,
+            .refractive_index = 1.5,
+        },
+    };
+    try w.objects.append(floor);
+
+    var ball = Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().translate(0, -3.5, -0.5),
+        .material = .{
+            .color = Color.init(1, 0, 0),
+            .ambient = 0.5,
+        },
+    };
+    try w.objects.append(ball);
+
+    const r = Ray.init(initPoint(0, 0, -3), initVector(0, -std.math.sqrt(2.0) / 2.0, std.math.sqrt(2.0) / 2.0));
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+    try xs.list.append(.{
+        .t = std.math.sqrt(2.0),
+        .object = floor,
+    });
+
+    const comps = prepareComputations(xs.list.items[0], r, xs);
+    const color = shadeHit(w, comps, MaxIterations);
+
+    try utils.expectColorApproxEq(Color.init(0.93391, 0.69643, 0.69243), color);
 }
 
 pub fn worldColorAt(world: World, ray: Ray, remaining: i32) !Color {
@@ -793,7 +838,7 @@ pub fn refractedColor(world: World, comps: Computations, remaining: i32) Color {
     const cos_i = comps.eyev.dot(comps.normalv);
     const sin2_t = n_ratio * n_ratio * (1 - cos_i * cos_i);
 
-    if (sin2_t >= 1.0) {
+    if (sin2_t > 1.0) {
         // total internal reflection
         return Color.Black;
     }
@@ -954,4 +999,69 @@ test "The reflected color for a nonreflective material" {
     const color = reflectedColor(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.init(0.19032, 0.2379, 0.14274), color);
+}
+
+fn schlick(comps: Computations) f64 {
+    // find cosine of the angle between eye and normal vector
+    var cos = comps.eyev.dot(comps.normalv);
+
+    // total internal reflection can only occur if n1>n2
+    if (comps.n1 > comps.n2) {
+        const n = comps.n1 / comps.n2;
+        const sin2_t = n * n * (1.0 - cos * cos);
+
+        if (sin2_t > 1.0) {
+            return 1.0;
+        }
+
+        // compute cosine of theta_t using trig identity
+        const cos_t = std.math.sqrt(1.0 - sin2_t);
+
+        // when n1 > n2, use cos(theta_t) instead
+        cos = cos_t;
+    }
+
+    const r0 = std.math.pow(f64, (comps.n1 - comps.n2) / (comps.n1 + comps.n2), 2.0);
+    return r0 + (1 - r0) * std.math.pow(f64, 1 - cos, 5.0);
+}
+
+test "The schlick approximation under total internal reflection" {
+    const shape = initGlassSphere();
+    const r = Ray.init(initPoint(0, 0, std.math.sqrt(2.0) / 2.0), initVector(0, 1, 0));
+
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+    try xs.list.append(.{ .t = -std.math.sqrt(2.0) / 2.0, .object = shape });
+    try xs.list.append(.{ .t = std.math.sqrt(2.0) / 2.0, .object = shape });
+
+    const comps = prepareComputations(xs.list.items[1], r, xs);
+    const reflectance = schlick(comps);
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), reflectance, 0.00001);
+}
+
+test "The Schlick approximation with a perpendicular viewing angle" {
+    const shape = initGlassSphere();
+    const r = Ray.init(initPoint(0, 0, 0), initVector(0, 1, 0));
+
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+    try xs.list.append(.{ .t = -1, .object = shape });
+    try xs.list.append(.{ .t = 1, .object = shape });
+
+    const comps = prepareComputations(xs.list.items[1], r, xs);
+    const reflectance = schlick(comps);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.04), reflectance, 0.00001);
+}
+
+test "The Schlick approximation with small angle and n2 > n1" {
+    const shape = initGlassSphere();
+    const r = Ray.init(initPoint(0, 0.99, -2), initVector(0, 0, 1));
+
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+    try xs.list.append(.{ .t = 1.8589, .object = shape });
+
+    const comps = prepareComputations(xs.list.items[0], r, xs);
+    const reflectance = schlick(comps);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.48873), reflectance, 0.00001);
 }

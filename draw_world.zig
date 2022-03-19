@@ -20,9 +20,8 @@ const Camera = @import("camera.zig").Camera;
 
 const calc = @import("calc.zig");
 
-const CanvasSize = 400;
-
 pub fn main() !void {
+    // https://forum.raytracerchallenge.com/thread/4/reflection-refraction-scene-description
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
@@ -30,91 +29,173 @@ pub fn main() !void {
     var world = World.init(allocator);
     defer world.deinit();
 
-    // const gradient_pattern = Pattern{
-    //     .pattern = .{ .gradient = .{ .a = Color.init(1, 1, 0.9), .b = Color.init(0.5, 0.7, 1) } },
-    // };
-    // const ring_pattern = Pattern{
-    //     .pattern = .{ .ring = .{ .a = Color.init(0, 1, 0), .b = Color.init(1, 0, 1) } },
-    // };
-    const checkers_pattern = Pattern{
-        .pattern = .{ .checkers = .{ .a = Color.init(0, 1, 0), .b = Color.init(0, 0.8, 0) } },
-    };
-    const stripe_pattern = Pattern{
-        .pattern = .{ .stripe = .{ .a = Color.init(0.5, 1, 0.1), .b = Color.init(1, 0.5, 0.1) } },
-        .transform = Mat4.identity().scale(0.2, 0.2, 0.2)
-            .rotateY(std.math.pi * 0.25)
-            .rotateZ(std.math.pi * 0.25),
+    var camera = Camera.init(900, 450, 1.152);
+    const from = initVector(-2.6, 1.5, -3.9);
+    const to = initVector(-0.6, 1, -0.8);
+    const up = initVector(0, 1, 0);
+    camera.transform = calc.viewTransform(from, to, up);
+
+    world.light = PointLight{
+        .position = initPoint(-4.9, 4.9, -1),
+        .intensity = Color.White,
     };
 
+    const wall_pattern = Pattern{
+        .pattern = .{ .stripe = .{ .a = Color.init(0.45, 0.45, 0.45), .b = Color.init(0.55, 0.55, 0.55) } },
+        .transform = Mat4.identity().scale(0.25, 0.25, 0.25).rotateY(1.5708),
+    };
+    const wall_material = Material{
+        .pattern = wall_pattern,
+        .ambient = 0,
+        .diffuse = 0.4,
+        .specular = 0,
+        .reflective = 0.3,
+    };
+
+    const floor_pattern = Pattern{
+        .pattern = .{ .checkers = .{ .a = Color.init(0.35, 0.35, 0.35), .b = Color.init(0.65, 0.65, 0.65) } },
+        .transform = Mat4.identity().rotateY(0.31415),
+    };
     const floor = Shape{
-        .material = Material{
-            .pattern = checkers_pattern,
-            .color = Color.init(1, 0.9, 0.9),
+        .material = .{
+            .pattern = floor_pattern,
             .specular = 0,
-            .reflective = 0.8,
+            .reflective = 0.4,
         },
         .geo = .{ .plane = .{} },
     };
     try world.objects.append(floor);
 
-    const middle = Shape{
-        .transform = Mat4.identity().translate(-0.5, 1, 0.5),
+    const ceiling = Shape{
+        .material = .{
+            .color = Color.init(0.8, 0.8, 0.8),
+            .ambient = 0.3,
+            .specular = 0,
+        },
+        .transform = Mat4.identity().translate(0, 5, 0),
+        .geo = .{ .plane = .{} },
+    };
+    try world.objects.append(ceiling);
+
+    // west wall
+    const west_wall = Shape{
+        .material = wall_material,
+        .transform = Mat4.identity().rotateY(1.5708).rotateZ(1.5708).translate(-5, 0, 0),
+        .geo = .{ .plane = .{} },
+    };
+    try world.objects.append(west_wall);
+
+    // east wall
+    const east_wall = Shape{
+        .material = wall_material,
+        .transform = Mat4.identity().rotateY(1.5708).rotateZ(1.5708).translate(5, 0, 0),
+        .geo = .{ .plane = .{} },
+    };
+    try world.objects.append(east_wall);
+
+    // north wall
+    const north_wall = Shape{
+        .material = wall_material,
+        .transform = Mat4.identity().rotateX(1.5708).translate(0, 0, 5),
+        .geo = .{ .plane = .{} },
+    };
+    try world.objects.append(north_wall);
+
+    // south wall
+    const south_wall = Shape{
+        .material = wall_material,
+        .transform = Mat4.identity().rotateX(1.5708).translate(0, 0, -5),
+        .geo = .{ .plane = .{} },
+    };
+    try world.objects.append(south_wall);
+
+    // background balls
+    try world.objects.append(Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().scale(0.4, 0.4, 0.4).translate(4.6, 0.4, 1.0),
         .material = Material{
-            .color = Color.init(1.0, 1.0, 1.0),
-            .diffuse = 0.7,
-            .specular = 0.3,
-            .transparency = 0.8,
+            .color = Color.init(0.8, 0.5, 0.3),
+            .shininess = 50,
+        },
+    });
+
+    try world.objects.append(Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().scale(0.3, 0.3, 0.3).translate(4.7, 0.3, 0.4),
+        .material = Material{
+            .color = Color.init(0.9, 0.4, 0.5),
+            .shininess = 50,
+        },
+    });
+
+    try world.objects.append(Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().scale(0.5, 0.5, 0.5).translate(-1, 0.5, 4.5),
+        .material = Material{
+            .color = Color.init(0.4, 0.9, 0.6),
+            .shininess = 50,
+        },
+    });
+
+    try world.objects.append(Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().scale(0.3, 0.3, 0.3).translate(-1.7, 0.3, 4.7),
+        .material = Material{
+            .color = Color.init(0.4, 0.6, 0.9),
+            .shininess = 50,
+        },
+    });
+
+    // foreground balls
+
+    // red sphere
+    try world.objects.append(Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().translate(-0.6, 1, 0.6),
+        .material = Material{
+            .color = Color.init(1.0, 0.3, 0.2),
+            .specular = 0.4,
+            .shininess = 5,
+        },
+    });
+
+    // blue glass sphere
+    try world.objects.append(Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().scale(0.7, 0.7, 0.7).translate(0.6, 0.7, -0.6),
+        .material = Material{
+            .color = Color.init(0, 0, 0.2),
+            .ambient = 0,
+            .diffuse = 0.4,
+            .specular = 0.9,
+            .shininess = 300,
+            .reflective = 0.9,
+            .transparency = 0.9,
             .refractive_index = 1.5,
         },
-        .geo = .{ .sphere = .{} },
-    };
-    try world.objects.append(middle);
+    });
 
-    const right = Shape{
-        .transform = Mat4.identity()
-            .scale(0.5, 0.5, 0.5)
-            .translate(1.5, 0.5, -0.5),
+    // green glass sphere
+    try world.objects.append(Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().scale(0.5, 0.5, 0.5).translate(-0.7, 0.5, -0.8),
         .material = Material{
-            .color = Color.init(0.5, 1, 0.1),
-            .diffuse = 0.7,
-            .pattern = stripe_pattern,
-            .specular = 0.3,
-            .reflective = 0.3,
+            .color = Color.init(0, 0.2, 0),
+            .ambient = 0,
+            .diffuse = 0.4,
+            .specular = 0.9,
+            .shininess = 300,
+            .reflective = 0.9,
+            .transparency = 0.9,
+            .refractive_index = 1.5,
         },
-        .geo = .{ .sphere = .{} },
-    };
-    try world.objects.append(right);
-
-    const left = Shape{
-        .transform = Mat4.identity()
-            .scale(0.33, 0.33, 0.33)
-            .translate(-1.5, 0.33, -0.75),
-        .material = Material{
-            .color = Color.init(1, 0.8, 0.1),
-            .diffuse = 0.7,
-            .specular = 0.3,
-        },
-        .geo = .{ .sphere = .{} },
-    };
-    try world.objects.append(left);
-
-    world.light = PointLight{
-        .position = initPoint(-10, 10, -10),
-        .intensity = Color.White,
-    };
-
-    const from = initPoint(0, 1.5, -5);
-    const to = initPoint(0, 1, 0);
-    const up = initVector(0, 1, 0);
-
-    var camera = Camera.init(400, 200, std.math.pi / 3.0);
-    camera.transform = calc.viewTransform(from, to, up);
+    });
 
     var canvas = try camera.render(allocator, world);
     defer canvas.deinit();
 
     const dir: std.fs.Dir = std.fs.cwd();
-    const file: std.fs.File = try dir.createFile("/tmp/result.ppm", .{});
+    const file: std.fs.File = try dir.createFile("result.ppm", .{});
     defer file.close();
 
     try canvasToPPM(canvas, file.writer());
