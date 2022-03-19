@@ -60,9 +60,11 @@ pub fn main() !void {
     const middle = Shape{
         .transform = Mat4.identity().translate(-0.5, 1, 0.5),
         .material = Material{
-            .color = Color.init(0.1, 1, 0.5),
+            .color = Color.init(1.0, 1.0, 1.0),
             .diffuse = 0.7,
             .specular = 0.3,
+            .transparency = 0.8,
+            .refractive_index = 1.5,
         },
         .geo = .{ .sphere = .{} },
     };

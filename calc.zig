@@ -235,13 +235,17 @@ const Computations = struct {
     object: Shape,
     point: Vec4,
     over_point: Vec4,
+    under_point: Vec4,
     eyev: Vec4,
     normalv: Vec4,
     reflectv: Vec4,
+    n1: f64,
+    n2: f64,
     inside: bool,
 };
 
-pub fn prepareComputations(intersection: Intersection, ray: Ray) Computations {
+pub fn prepareComputations(intersection: Intersection, ray: Ray, xs: ?Intersections) Computations {
+    _ = xs;
     const point = ray.position(intersection.t);
     const eyev = ray.direction.negate();
 
@@ -257,16 +261,47 @@ pub fn prepareComputations(intersection: Intersection, ray: Ray) Computations {
 
     const epsilon = 0.0001;
     const over_point = point.add(normalv.scale(epsilon));
+    const under_point = point.sub(normalv.scale(epsilon));
+
+    var n1: f64 = 1.0;
+    var n2: f64 = 1.0;
+
+    if (xs != null) {
+        var containers = std.ArrayList(Shape).init(xs.?.allocator);
+        defer containers.deinit();
+
+        for (xs.?.list.items) |i| {
+            const is_hit = std.meta.eql(i, intersection);
+            if (is_hit) {
+                n1 = if (containers.items.len == 0) 1.0 else containers.items[containers.items.len - 1].material.refractive_index;
+            }
+
+            for (containers.items) |c, idx| {
+                if (std.meta.eql(c, i.object)) {
+                    _ = containers.orderedRemove(idx);
+                    break;
+                }
+            } else containers.append(i.object) catch unreachable;
+
+            if (is_hit) {
+                n2 = if (containers.items.len == 0) 1.0 else containers.items[containers.items.len - 1].material.refractive_index;
+                break;
+            }
+        }
+    }
 
     return Computations{
         .t = intersection.t,
         .object = intersection.object,
         .point = point,
         .over_point = over_point,
+        .under_point = under_point,
         .eyev = eyev,
         .normalv = normalv,
         .reflectv = reflectv,
         .inside = inside,
+        .n1 = n1,
+        .n2 = n2,
     };
 }
 
@@ -278,7 +313,7 @@ test "Precomputing the state of an intersection" {
         .object = shape,
     };
 
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
 
     try std.testing.expectEqual(@as(f64, 4.0), comps.t);
     try std.testing.expectEqual(shape, comps.object);
@@ -295,7 +330,7 @@ test "The hit, when an intersection occurs on the outside" {
         .object = shape,
     };
 
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
     try std.testing.expectEqual(false, comps.inside);
 }
 
@@ -307,7 +342,7 @@ test "The hit, when an intersection occurs on the inside" {
         .object = shape,
     };
 
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
     try std.testing.expectEqual(initPoint(0, 0, 1), comps.point);
     try std.testing.expectEqual(initVector(0, 0, -1), comps.eyev);
     try std.testing.expectEqual(true, comps.inside);
@@ -325,7 +360,7 @@ test "The hit should offset the point" {
         .object = shape,
     };
 
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
     try std.testing.expectEqual(@as(f64, -0.0001), comps.over_point.z);
     try std.testing.expect(comps.point.z > comps.over_point.z);
 }
@@ -337,8 +372,77 @@ test "Precomputing the reflection vector" {
         .t = std.math.sqrt(2.0),
         .object = shape,
     };
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
     try utils.expectVec4ApproxEq(initVector(0, std.math.sqrt(2.0) / 2.0, std.math.sqrt(2.0) / 2.0), comps.reflectv);
+}
+
+pub fn initGlassSphere() Shape {
+    return .{
+        .geo = .{ .sphere = .{} },
+        .material = .{ .transparency = 1.0, .refractive_index = 1.5 },
+    };
+}
+
+test "The under point is offset below the surface" {
+    var shape = initGlassSphere();
+    shape.transform = Mat4.identity().translate(0, 0, 1);
+
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
+    const i = Intersection{
+        .t = 5.0,
+        .object = shape,
+    };
+    const comps = prepareComputations(i, r, null);
+    try std.testing.expectEqual(@as(f64, 0.0001), comps.under_point.z);
+    try std.testing.expect(comps.point.z < comps.under_point.z);
+}
+
+test "Finding n1 and n2 at various inersections" {
+    const Example = struct {
+        index: u32,
+        n1: f64,
+        n2: f64,
+    };
+
+    const examples: []const Example = &[_]Example{
+        .{ .index = 0, .n1 = 1.0, .n2 = 1.5 },
+        .{ .index = 1, .n1 = 1.5, .n2 = 2.0 },
+        .{ .index = 2, .n1 = 2.0, .n2 = 2.5 },
+        .{ .index = 3, .n1 = 2.5, .n2 = 2.5 },
+        .{ .index = 4, .n1 = 2.5, .n2 = 1.5 },
+        .{ .index = 5, .n1 = 1.5, .n2 = 1.0 },
+    };
+
+    var a = initGlassSphere();
+    a.transform = Mat4.identity().scale(2, 2, 2);
+    a.material.refractive_index = 1.5;
+
+    var b = initGlassSphere();
+    b.transform = Mat4.identity().translate(0, 0, -0.25);
+    b.material.refractive_index = 2.0;
+
+    var c = initGlassSphere();
+    c.transform = Mat4.identity().translate(0, 0, 0.25);
+    c.material.refractive_index = 2.5;
+
+    const r = Ray.init(initPoint(0, 0, -4), initVector(0, 0, 1));
+
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+
+    try xs.list.append(.{ .t = 2, .object = a });
+    try xs.list.append(.{ .t = 2.75, .object = b });
+    try xs.list.append(.{ .t = 3.25, .object = c });
+    try xs.list.append(.{ .t = 4.75, .object = b });
+    try xs.list.append(.{ .t = 5.25, .object = c });
+    try xs.list.append(.{ .t = 6, .object = a });
+
+    for (examples) |example| {
+        const i = xs.list.items[example.index];
+        const comps = prepareComputations(i, r, xs);
+        try utils.expectEpsilonEq(example.n1, comps.n1);
+        try utils.expectEpsilonEq(example.n2, comps.n2);
+    }
 }
 
 pub fn shadeHit(world: World, comps: Computations, remaining: i32) Color {
@@ -354,8 +458,9 @@ pub fn shadeHit(world: World, comps: Computations, remaining: i32) Color {
     );
 
     const reflected = reflectedColor(world, comps, remaining);
+    const refracted = refractedColor(world, comps, remaining);
 
-    return surface.add(reflected);
+    return surface.add(reflected).add(refracted);
 }
 
 test "Shading an intersection" {
@@ -369,7 +474,7 @@ test "Shading an intersection" {
         .object = shape,
     };
 
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
     const c = shadeHit(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.init(0.38066, 0.47583, 0.2855), c);
@@ -391,7 +496,7 @@ test "Shading an intersection from the inside" {
         .object = shape,
     };
 
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
     const c = shadeHit(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.init(0.90498, 0.90498, 0.90498), c);
@@ -421,7 +526,7 @@ test "shade_hit() is given an intersection in shadow" {
         .object = s2,
     };
 
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
     const c = shadeHit(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.init(0.1, 0.1, 0.1), c);
@@ -444,10 +549,48 @@ test "shade_hit() with a reflective material" {
         .object = shape,
     };
 
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
     const color = shadeHit(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.init(0.87677, 0.92436, 0.82918), color);
+}
+
+test "shade_hit() with a transparent material" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    var floor = Shape{
+        .geo = .{ .plane = .{} },
+        .transform = Mat4.identity().translate(0, -1, 0),
+        .material = .{
+            .transparency = 0.5,
+            .refractive_index = 1.5,
+        },
+    };
+    try w.objects.append(floor);
+
+    var ball = Shape{
+        .geo = .{ .sphere = .{} },
+        .transform = Mat4.identity().translate(0, -3.5, -0.5),
+        .material = .{
+            .color = Color.init(1, 0, 0),
+            .ambient = 0.5,
+        },
+    };
+    try w.objects.append(ball);
+
+    const r = Ray.init(initPoint(0, 0, -3), initVector(0, -std.math.sqrt(2.0) / 2.0, std.math.sqrt(2.0) / 2.0));
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+    try xs.list.append(.{
+        .t = std.math.sqrt(2.0),
+        .object = floor,
+    });
+
+    const comps = prepareComputations(xs.list.items[0], r, xs);
+    const color = shadeHit(w, comps, MaxIterations);
+
+    try utils.expectColorApproxEq(Color.init(0.93642, 0.68642, 0.68642), color);
 }
 
 pub fn worldColorAt(world: World, ray: Ray, remaining: i32) !Color {
@@ -456,7 +599,7 @@ pub fn worldColorAt(world: World, ray: Ray, remaining: i32) !Color {
 
     const hit = xs.hit();
     if (hit != null) {
-        const comps = prepareComputations(hit.?, ray);
+        const comps = prepareComputations(hit.?, ray, xs);
         return shadeHit(world, comps, remaining);
     } else {
         return Color.Black;
@@ -637,6 +780,123 @@ test "There is no shadow when an object is behind the point" {
     try std.testing.expect(result == false);
 }
 
+pub fn refractedColor(world: World, comps: Computations, remaining: i32) Color {
+    if (remaining <= 0) {
+        return Color.Black;
+    }
+
+    if (std.math.approxEqAbs(f64, comps.object.material.transparency, 0.0, std.math.epsilon(f64))) {
+        return Color.Black;
+    }
+
+    const n_ratio = comps.n1 / comps.n2;
+    const cos_i = comps.eyev.dot(comps.normalv);
+    const sin2_t = n_ratio * n_ratio * (1 - cos_i * cos_i);
+
+    if (sin2_t >= 1.0) {
+        // total internal reflection
+        return Color.Black;
+    }
+
+    const cos_t = std.math.sqrt(1.0 - sin2_t);
+    const direction = comps.normalv.scale(n_ratio * cos_i - cos_t).sub(comps.eyev.scale(n_ratio));
+
+    const refract_ray = Ray.init(comps.under_point, direction);
+
+    const color = worldColorAt(world, refract_ray, remaining - 1) catch Color.Black;
+    return color.scale(comps.object.material.transparency);
+}
+
+test "The refracted color with an opaque surface" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
+
+    var shape = &w.objects.items[1];
+    shape.material.transparency = 0.0;
+
+    const i = Intersection{
+        .t = 4,
+        .object = shape.*,
+    };
+
+    const comps = prepareComputations(i, r, null);
+    const color = refractedColor(w, comps, MaxIterations);
+
+    try utils.expectColorApproxEq(Color.Black, color);
+}
+
+test "The refracted color at maximum recursive depth" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    var shape = &w.objects.items[0];
+    shape.material.transparency = 1.0;
+    shape.material.refractive_index = 1.5;
+
+    const r = Ray.init(initPoint(0, 0, -5), initVector(0, 0, 1));
+
+    const i = Intersection{
+        .t = 4,
+        .object = shape.*,
+    };
+
+    const comps = prepareComputations(i, r, null);
+    const color = refractedColor(w, comps, 0);
+
+    try utils.expectColorApproxEq(Color.Black, color);
+}
+
+test "The refracted color under total internal reflection" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    var shape = &w.objects.items[0];
+    shape.material.transparency = 1.0;
+    shape.material.refractive_index = 1.5;
+
+    const r = Ray.init(initPoint(0, 0, std.math.sqrt(2.0) / 2.0), initVector(0, 1, 0));
+
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+
+    try xs.list.append(.{ .t = -std.math.sqrt(2.0) / 2.0, .object = shape.* });
+    try xs.list.append(.{ .t = std.math.sqrt(2.0) / 2.0, .object = shape.* });
+
+    const comps = prepareComputations(xs.list.items[1], r, xs);
+    const color = refractedColor(w, comps, MaxIterations);
+
+    try utils.expectColorApproxEq(Color.Black, color);
+}
+
+test "The refracted color with a refracted ray" {
+    var w = try World.initDefault(alloc);
+    defer w.deinit();
+
+    var a = &w.objects.items[0];
+    a.material.ambient = 1.0;
+    a.material.pattern = .{ .pattern = .{ .point = {} } };
+
+    var b = &w.objects.items[1];
+    b.material.transparency = 1.0;
+    b.material.refractive_index = 1.5;
+
+    const r = Ray.init(initPoint(0, 0, 0.1), initVector(0, 1, 0));
+    var xs = Intersections.init(alloc);
+    defer xs.deinit();
+
+    try xs.list.append(.{ .t = -0.9899, .object = a.* });
+    try xs.list.append(.{ .t = -0.4899, .object = b.* });
+    try xs.list.append(.{ .t = 0.4899, .object = b.* });
+    try xs.list.append(.{ .t = 0.9899, .object = a.* });
+
+    const comps = prepareComputations(xs.list.items[2], r, xs);
+    const color = refractedColor(w, comps, MaxIterations);
+
+    try utils.expectColorApproxEq(Color.init(0, 0.99888, 0.04725), color);
+}
+
 pub fn reflectedColor(world: World, comps: Computations, remaining: i32) Color {
     if (remaining <= 0) {
         return Color.Black;
@@ -667,7 +927,7 @@ test "The reflected color for a nonreflective material" {
         .object = shape.*,
     };
 
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
     const color = reflectedColor(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.Black, color);
@@ -690,7 +950,7 @@ test "The reflected color for a nonreflective material" {
         .object = shape,
     };
 
-    const comps = prepareComputations(i, r);
+    const comps = prepareComputations(i, r, null);
     const color = reflectedColor(w, comps, MaxIterations);
 
     try utils.expectColorApproxEq(Color.init(0.19032, 0.2379, 0.14274), color);
